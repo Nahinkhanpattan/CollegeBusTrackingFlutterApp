@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "670144541497",
+    "project_id": "collegebustrackingflutterapp",
+    "storage_bucket": "collegebustrackingflutterapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:670144541497:android:d0b1dacb31e29d58aceee8",
+        "android_client_info": {
+          "package_name": "com.example.collegebus"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyALKYuU_cpEV_rjyZDX6POB30GC-oASDVU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
