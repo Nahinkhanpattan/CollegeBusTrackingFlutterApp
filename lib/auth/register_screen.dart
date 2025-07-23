@@ -196,6 +196,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 
                 const SizedBox(height: AppSizes.paddingXLarge),
                 
+                // Role selection (moved to top)
+                const Text(
+                  'Select Your Role',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppSizes.paddingSmall),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSizes.paddingMedium),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+                    border: Border.all(color: Colors.grey),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<UserRole>(
+                      value: _selectedRole,
+                      isExpanded: true,
+                      items: UserRole.values
+                          .where((role) => role != UserRole.admin)
+                          .map((role) {
+                        return DropdownMenuItem(
+                          value: role,
+                          child: Text(role.displayName),
+                        );
+                      }).toList(),
+                      onChanged: (UserRole? newRole) {
+                        if (newRole != null) {
+                          setState(() => _selectedRole = newRole);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: AppSizes.paddingMedium),
+                
                 // Full Name field
                 CustomInputField(
                   label: 'Full Name',
@@ -370,46 +410,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 if (_selectedRole == UserRole.student)
                   const SizedBox(height: AppSizes.paddingMedium),
-                // Role selection (hide admin or disable it)
-                const Text(
-                  'Select Your Role',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: AppSizes.paddingSmall),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSizes.paddingMedium),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
-                    border: Border.all(color: Colors.grey),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<UserRole>(
-                      value: _selectedRole,
-                      isExpanded: true,
-                      items: UserRole.values
-                          .where((role) => role != UserRole.admin)
-                          .map((role) {
-                        return DropdownMenuItem(
-                          value: role,
-                          child: Text(role.displayName),
-                        );
-                      }).toList(),
-                      onChanged: (UserRole? newRole) {
-                        if (newRole != null) {
-                          setState(() => _selectedRole = newRole);
-                        }
-                      },
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(height: AppSizes.paddingMedium),
-                
                 // Password field
                 CustomInputField(
                   label: 'Password',

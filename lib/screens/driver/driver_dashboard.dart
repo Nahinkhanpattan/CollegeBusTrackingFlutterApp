@@ -29,7 +29,7 @@ class _DriverDashboardState extends State<DriverDashboard>
   final _busNumberController = TextEditingController();
   final _startPointController = TextEditingController();
   final _endPointController = TextEditingController();
-  final _stopPointsController = TextEditingController();
+  List<TextEditingController> _stopControllers = [];
 
   @override
   void initState() {
@@ -37,6 +37,7 @@ class _DriverDashboardState extends State<DriverDashboard>
     _tabController = TabController(length: 2, vsync: this);
     _getCurrentLocation();
     _loadMyBus();
+    _addStopController(); // Add initial stop controller
   }
 
   @override
@@ -45,8 +46,25 @@ class _DriverDashboardState extends State<DriverDashboard>
     _busNumberController.dispose();
     _startPointController.dispose();
     _endPointController.dispose();
-    _stopPointsController.dispose();
+    for (var controller in _stopControllers) {
+      controller.dispose();
+    }
     super.dispose();
+  }
+  
+  void _addStopController() {
+    setState(() {
+      _stopControllers.add(TextEditingController());
+    });
+  }
+  
+  void _removeStopController(int index) {
+    if (_stopControllers.length > 1) {
+      setState(() {
+        _stopControllers[index].dispose();
+        _stopControllers.removeAt(index);
+      });
+    }
   }
 
   Future<void> _getCurrentLocation() async {
@@ -72,7 +90,22 @@ class _DriverDashboardState extends State<DriverDashboard>
           _busNumberController.text = bus.busNumber;
           _startPointController.text = bus.startPoint;
           _endPointController.text = bus.endPoint;
-          _stopPointsController.text = bus.stopPoints.join(', ');
+          
+          // Clear existing controllers
+          for (var controller in _stopControllers) {
+            controller.dispose();
+          }
+          _stopControllers.clear();
+          
+          // Add controllers for existing stops
+          for (int i = 0; i < bus.stopPoints.length; i++) {
+            _stopControllers.add(TextEditingController(text: bus.stopPoints[i]));
+          }
+          
+          // Ensure at least one stop controller
+          if (_stopControllers.isEmpty) {
+            _addStopController();
+          }
         });
       }
     }
@@ -96,9 +129,8 @@ class _DriverDashboardState extends State<DriverDashboard>
     
     final currentUser = authService.currentUserModel;
     if (currentUser != null) {
-      final stopPoints = _stopPointsController.text
-          .split(',')
-          .map((e) => e.trim())
+      final stopPoints = _stopControllers
+          .map((controller) => controller.text.trim())
           .where((e) => e.isNotEmpty)
           .toList();
 
@@ -257,12 +289,55 @@ class _DriverDashboardState extends State<DriverDashboard>
                 
                 const SizedBox(height: AppSizes.paddingMedium),
                 
-                CustomInputField(
-                  label: 'Stop Points',
-                  hint: 'Enter stops separated by commas',
-                  controller: _stopPointsController,
-                  prefixIcon: const Icon(Icons.stop),
-                  maxLines: 3,
+                // Stop Points with dynamic fields
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Stop Points',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _addStopController,
+                      icon: const Icon(Icons.add_circle, color: AppColors.primary),
+                      tooltip: 'Add Stop',
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: AppSizes.paddingSmall),
+                
+                // Dynamic stop point fields
+                ..._stopControllers.asMap().entries.map((entry) {
+                  int index = entry.key;
+                  TextEditingController controller = entry.value;
+                  
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: AppSizes.paddingSmall),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: CustomInputField(
+                            label: 'Stop ${index + 1}',
+                            hint: 'Enter stop name',
+                            controller: controller,
+                            prefixIcon: const Icon(Icons.stop),
+                          ),
+                        ),
+                        if (_stopControllers.length > 1)
+                          IconButton(
+                            onPressed: () => _removeStopController(index),
+                            icon: const Icon(Icons.remove_circle, color: AppColors.error),
+                            tooltip: 'Remove Stop',
+                          ),
+                      ],
+                    ),
+                  );
+                }).toList(),
                 ),
                 
                 const SizedBox(height: AppSizes.paddingLarge),

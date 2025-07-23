@@ -27,6 +27,7 @@ class _StudentDashboardState extends State<StudentDashboard>
   BusModel? _selectedBus;
   LatLng? _currentLocation;
   bool _isTrackingBus = false;
+  Set<Polyline> _polylines = {};
   String? _selectedStop;
   String? _selectedBusNumber;
 
@@ -127,11 +128,86 @@ class _StudentDashboardState extends State<StudentDashboard>
     // Add bus markers for filtered buses
     for (final bus in _filteredBuses) {
       _addBusMarker(bus, newMarkers);
+      _addBusRoutePolyline(bus);
     }
 
     setState(() {
       _markers = newMarkers;
     });
+  }
+  
+  void _addBusRoutePolyline(BusModel bus) {
+    if (_selectedBus?.id == bus.id) {
+      // Create route polyline for selected bus
+      final routePoints = <LatLng>[];
+      
+      // Add mock coordinates for demonstration
+      // In a real app, you'd get actual coordinates for each stop
+      final startCoord = _getMockCoordinateForLocation(bus.startPoint);
+      routePoints.add(startCoord);
+      
+      for (final stop in bus.stopPoints) {
+        routePoints.add(_getMockCoordinateForLocation(stop));
+      }
+      
+      final endCoord = _getMockCoordinateForLocation(bus.endPoint);
+      routePoints.add(endCoord);
+      
+      final polyline = Polyline(
+        polylineId: PolylineId('route_${bus.id}'),
+        points: routePoints,
+        color: AppColors.primary,
+        width: 4,
+        patterns: [PatternItem.dash(20), PatternItem.gap(10)],
+      );
+      
+      setState(() {
+        _polylines = {polyline};
+      });
+      
+      // Add stop markers
+      for (int i = 0; i < routePoints.length; i++) {
+        final stopName = i == 0 ? bus.startPoint : 
+                        i == routePoints.length - 1 ? bus.endPoint :
+                        bus.stopPoints[i - 1];
+        
+        _markers.add(
+          Marker(
+            markerId: MarkerId('stop_${bus.id}_$i'),
+            position: routePoints[i],
+            infoWindow: InfoWindow(
+              title: stopName,
+              snippet: i == 0 ? 'Start Point' : 
+                      i == routePoints.length - 1 ? 'End Point' : 'Stop',
+            ),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              i == 0 ? BitmapDescriptor.hueGreen : 
+              i == routePoints.length - 1 ? BitmapDescriptor.hueRed :
+              BitmapDescriptor.hueOrange
+            ),
+          ),
+        );
+      }
+    }
+  }
+  
+  LatLng _getMockCoordinateForLocation(String location) {
+    // Mock coordinates - in a real app, use geocoding service
+    final mockCoords = {
+      'Central Station': const LatLng(12.9716, 77.5946),
+      'City Center': const LatLng(12.9726, 77.5956),
+      'Shopping Mall': const LatLng(12.9736, 77.5966),
+      'Hospital': const LatLng(12.9746, 77.5976),
+      'University Campus': const LatLng(12.9756, 77.5986),
+      'Airport': const LatLng(12.9766, 77.5996),
+      'Hotel District': const LatLng(12.9776, 77.6006),
+      'Business Park': const LatLng(12.9786, 77.6016),
+      'Suburban Area': const LatLng(12.9796, 77.6026),
+      'Residential Area': const LatLng(12.9806, 77.6036),
+      'Park': const LatLng(12.9816, 77.6046),
+    };
+    
+    return mockCoords[location] ?? _currentLocation ?? const LatLng(12.9716, 77.5946);
   }
 
   void _addBusMarker(BusModel bus, Set<Marker> markers) {
@@ -144,15 +220,34 @@ class _StudentDashboardState extends State<StudentDashboard>
           markerId: MarkerId('bus_${bus.id}'),
           position: location.currentLocation,
           infoWindow: InfoWindow(
-            title: 'Bus ${bus.busNumber}',
+            title: 'Bus ${bus.busNumber} ${bus.isActive ? "(Live)" : "(Not Live)"}',
             snippet: '${bus.startPoint} → ${bus.endPoint}\nLast updated: ${location.timestamp.toString().substring(11, 16)}',
           ),
           icon: BitmapDescriptor.defaultMarkerWithHue(
-            _selectedBus?.id == bus.id ? BitmapDescriptor.hueRed : BitmapDescriptor.hueGreen,
+            _selectedBus?.id == bus.id ? BitmapDescriptor.hueRed : 
+            bus.isActive ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueOrange,
           ),
           onTap: () => _selectBus(bus),
         );
 
+        setState(() {
+          _markers.removeWhere((m) => m.markerId.value == 'bus_${bus.id}');
+          _markers.add(marker);
+        });
+      } else {
+        // Show bus at start point if no live location
+        final startLocation = _getMockCoordinateForLocation(bus.startPoint);
+        final marker = Marker(
+          markerId: MarkerId('bus_${bus.id}'),
+          position: startLocation,
+          infoWindow: InfoWindow(
+            title: 'Bus ${bus.busNumber} (Not Live)',
+            snippet: '${bus.startPoint} → ${bus.endPoint}\nStatus: Offline',
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+          onTap: () => _selectBus(bus),
+        );
+        
         setState(() {
           _markers.removeWhere((m) => m.markerId.value == 'bus_${bus.id}');
           _markers.add(marker);
@@ -200,6 +295,7 @@ class _StudentDashboardState extends State<StudentDashboard>
       _selectedStop = null;
       _selectedBusNumber = null;
       _selectedBus = null;
+      _polylines.clear();
     });
     _applyFilters();
     _updateMarkers();
@@ -369,6 +465,7 @@ class _StudentDashboardState extends State<StudentDashboard>
                           zoom: 14.0,
                         ),
                         markers: _markers,
+                        polylines: _polylines,
                         myLocationEnabled: true,
                         myLocationButtonEnabled: true,
                       )
@@ -405,6 +502,15 @@ class _StudentDashboardState extends State<StudentDashboard>
                         style: const TextStyle(
                           fontSize: 16,
                           color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: AppSizes.paddingSmall),
+                      Text(
+                        'Status: ${_selectedBus!.isActive ? "Live" : "Not Live"}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _selectedBus!.isActive ? AppColors.success : AppColors.warning,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       if (_selectedBus!.stopPoints.isNotEmpty) ...[

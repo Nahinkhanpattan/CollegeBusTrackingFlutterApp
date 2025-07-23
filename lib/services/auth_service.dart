@@ -318,6 +318,7 @@ class AuthService extends ChangeNotifier {
       final role = _currentUserModel!.role;
       final approved = _currentUserModel!.approved;
       final emailVerified = _currentUserModel!.emailVerified || user.emailVerified;
+      final needsManualApproval = _currentUserModel!.needsManualApproval;
 
       // Admin: Only allow login if approved
       if (role == UserRole.admin) {
@@ -333,39 +334,50 @@ class AuthService extends ChangeNotifier {
         };
       }
 
-      // Bus Coordinator, Teacher, Student: Allow login if email verified (OTP), else require approval
-      if (role == UserRole.busCoordinator || role == UserRole.teacher || role == UserRole.student) {
-        if (emailVerified) {
-          return {
-            'success': true,
-            'message': 'Login successful.',
-          };
-        } else if (approved) {
-          return {
-            'success': true,
-            'message': 'Login successful.',
-          };
-        } else {
-          return {
-            'success': false,
-            'message': 'Your account is pending approval or email verification.',
-            'needsEmailVerification': true,
-          };
-        }
-      }
-
-      // Driver: Only allow login if approved
+      // Driver: Only allow login if approved by coordinator
       if (role == UserRole.driver) {
         if (!approved) {
           return {
             'success': false,
-            'message': 'Your account is pending approval.',
+            'message': 'Your account is pending approval from the bus coordinator.',
           };
         }
         return {
           'success': true,
           'message': 'Login successful.',
         };
+      }
+
+      // Bus Coordinator, Teacher, Student: Check email verification and approval
+      if (role == UserRole.busCoordinator || role == UserRole.teacher || role == UserRole.student) {
+        if (!emailVerified && !approved) {
+          return {
+            'success': false,
+            'message': 'Please verify your email address first.',
+            'needsEmailVerification': true,
+          };
+        }
+        
+        if (emailVerified && !needsManualApproval) {
+          return {
+            'success': true,
+            'message': 'Login successful.',
+          };
+        }
+        
+        if (approved) {
+          return {
+            'success': true,
+            'message': 'Login successful.',
+          };
+        }
+        
+        if (needsManualApproval && !approved) {
+          return {
+            'success': false,
+            'message': 'Your account is pending approval from administrator.',
+          };
+        }
       }
 
       // Default fallback

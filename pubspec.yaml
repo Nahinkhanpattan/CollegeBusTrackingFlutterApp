@@ -51,6 +51,9 @@ dependencies:
   geolocator: ^13.0.1
   google_maps_flutter: ^2.10.0
   
+  # Add missing import for polylines
+  maps_toolkit: ^3.0.0
+  
   # Permissions
   permission_handler: ^11.3.1
   
