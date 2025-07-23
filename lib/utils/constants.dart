@@ -81,6 +81,7 @@ class FirebaseCollections {
   static const String users = 'users';
   static const String colleges = 'colleges';
   static const String buses = 'buses';
+  static const String routes = 'routes';
   static const String busLocations = 'bus_locations';
   static const String notifications = 'notifications';
 }

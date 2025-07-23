@@ -359,12 +359,174 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                         _buildInfoRow('Total Buses', _buses.length.toString()),
                         _buildInfoRow('Active Buses', _buses.where((b) => b.isActive).length.toString()),
                         _buildInfoRow('Pending Drivers', _pendingDrivers.length.toString()),
+                        _buildInfoRow('Total Routes', _routes.length.toString()),
                       ],
                     ),
                   ),
                 ),
               ],
             ),
+          ),
+          
+          // Route Management Tab
+          Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppSizes.paddingMedium),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Routes',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: _showCreateRouteDialog,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Create Route'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.onPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: _routes.isEmpty
+                    ? const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.route_outlined,
+                              size: 64,
+                              color: AppColors.textSecondary,
+                            ),
+                            SizedBox(height: AppSizes.paddingMedium),
+                            Text(
+                              'No routes created yet',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            SizedBox(height: AppSizes.paddingSmall),
+                            Text(
+                              'Create routes for drivers to select',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: AppColors.textSecondary,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSizes.paddingMedium),
+                        itemCount: _routes.length,
+                        itemBuilder: (context, index) {
+                          final route = _routes[index];
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: AppSizes.paddingMedium),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: route.routeType == 'pickup' 
+                                    ? AppColors.success 
+                                    : AppColors.primary,
+                                child: Icon(
+                                  route.routeType == 'pickup' 
+                                      ? Icons.arrow_upward 
+                                      : Icons.arrow_downward,
+                                  color: AppColors.onPrimary,
+                                ),
+                              ),
+                              title: Text(
+                                route.displayName,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('${route.startPoint} → ${route.endPoint}'),
+                                  if (route.stopPoints.isNotEmpty)
+                                    Text(
+                                      'Stops: ${route.stopPoints.join(', ')}',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                ],
+                              ),
+                              trailing: PopupMenuButton(
+                                itemBuilder: (context) => [
+                                  const PopupMenuItem(
+                                    value: 'edit',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.edit),
+                                        SizedBox(width: 8),
+                                        Text('Edit'),
+                                      ],
+                                    ),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.delete, color: AppColors.error),
+                                        SizedBox(width: 8),
+                                        Text('Delete'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                onSelected: (value) async {
+                                  if (value == 'delete') {
+                                    final confirmed = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text('Delete Route'),
+                                        content: Text('Are you sure you want to delete ${route.routeName}?'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.of(context).pop(false),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          ElevatedButton(
+                                            onPressed: () => Navigator.of(context).pop(true),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: AppColors.error,
+                                            ),
+                                            child: const Text('Delete'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    
+                                    if (confirmed == true) {
+                                      final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+                                      await firestoreService.deleteRoute(route.id);
+                                      
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Route deleted successfully'),
+                                          backgroundColor: AppColors.success,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+                              isThreeLine: route.stopPoints.isNotEmpty,
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
           ),
         ],
       ),

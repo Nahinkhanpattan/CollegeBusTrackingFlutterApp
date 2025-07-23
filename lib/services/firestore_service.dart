@@ -286,6 +286,56 @@ class FirestoreService {
     }
   }
 
+  // Route operations
+  Future<void> createRoute(RouteModel route) async {
+    try {
+      await _firestore
+          .collection(FirebaseCollections.routes)
+          .doc(route.id)
+          .set(route.toMap());
+    } catch (e) {
+      throw Exception('Error creating route: $e');
+    }
+  }
+
+  Future<void> updateRoute(String routeId, Map<String, dynamic> data) async {
+    try {
+      await _firestore
+          .collection(FirebaseCollections.routes)
+          .doc(routeId)
+          .update(data);
+    } catch (e) {
+      throw Exception('Error updating route: $e');
+    }
+  }
+
+  Stream<List<RouteModel>> getRoutesByCollege(String collegeId) {
+    try {
+      return _firestore
+          .collection(FirebaseCollections.routes)
+          .where('collegeId', isEqualTo: collegeId)
+          .where('isActive', isEqualTo: true)
+          .snapshots()
+          .map((snapshot) => snapshot.docs
+              .map((doc) => RouteModel.fromMap(doc.data(), doc.id))
+              .toList());
+    } catch (e) {
+      // Return mock data if Firebase is not available
+      return Stream.value([]);
+    }
+  }
+
+  Future<void> deleteRoute(String routeId) async {
+    try {
+      await _firestore
+          .collection(FirebaseCollections.routes)
+          .doc(routeId)
+          .update({'isActive': false});
+    } catch (e) {
+      throw Exception('Error deleting route: $e');
+    }
+  }
+
   // Bus location operations
   Future<void> updateBusLocation(String busId, BusLocationModel location) async {
     try {

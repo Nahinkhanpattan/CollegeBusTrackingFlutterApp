@@ -1,69 +1,56 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:pinput/pinput.dart';
 import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/widgets/custom_button.dart';
 import 'package:collegebus/utils/constants.dart';
 
-class OtpVerificationScreen extends StatefulWidget {
+class EmailVerificationScreen extends StatefulWidget {
   final String email;
 
-  const OtpVerificationScreen({
+  const EmailVerificationScreen({
     super.key,
     required this.email,
   });
 
   @override
-  State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
+  State<EmailVerificationScreen> createState() => _EmailVerificationScreenState();
 }
 
-class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
-  final _otpController = TextEditingController();
-  bool _isLoading = false;
+class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   bool _isResending = false;
+  bool _isChecking = false;
 
-  @override
-  void dispose() {
-    _otpController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _verifyOtp() async {
-    if (_otpController.text.length != 6) {
-      _showErrorSnackBar('Please enter a valid 6-digit code');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final authService = Provider.of<AuthService>(context, listen: false);
-      final verified = await authService.verifyEmail();
-      
-      if (verified) {
-        _showSuccessDialog();
-      } else {
-        _showErrorSnackBar('Invalid verification code. Please try again.');
-      }
-    } catch (e) {
-      _showErrorSnackBar('An error occurred. Please try again.');
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _resendOtp() async {
+  Future<void> _resendVerificationEmail() async {
     setState(() => _isResending = true);
 
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
       await authService.resendEmailVerification();
-      _showSuccessSnackBar('Verification code sent to ${widget.email}');
+      _showSuccessSnackBar('Verification email sent to ${widget.email}');
     } catch (e) {
-      _showErrorSnackBar('Failed to resend code. Please try again.');
+      _showErrorSnackBar('Failed to resend email. Please try again.');
     } finally {
       setState(() => _isResending = false);
+    }
+  }
+
+  Future<void> _checkVerificationStatus() async {
+    setState(() => _isChecking = true);
+
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final isVerified = await authService.checkEmailVerification();
+      
+      if (isVerified) {
+        _showSuccessDialog();
+      } else {
+        _showErrorSnackBar('Email not verified yet. Please check your email and click the verification link.');
+      }
+    } catch (e) {
+      _showErrorSnackBar('Error checking verification status. Please try again.');
+    } finally {
+      setState(() => _isChecking = false);
     }
   }
 
@@ -107,32 +94,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final defaultPinTheme = PinTheme(
-      width: 56,
-      height: 56,
-      textStyle: const TextStyle(
-        fontSize: 20,
-        color: AppColors.textPrimary,
-        fontWeight: FontWeight.w600,
-      ),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey),
-        borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
-        color: AppColors.surface,
-      ),
-    );
-
-    final focusedPinTheme = defaultPinTheme.copyDecorationWith(
-      border: Border.all(color: AppColors.primary, width: 2),
-    );
-
-    final submittedPinTheme = defaultPinTheme.copyWith(
-      decoration: defaultPinTheme.decoration?.copyWith(
-        color: AppColors.primary.withOpacity(0.1),
-        border: Border.all(color: AppColors.primary),
-      ),
-    );
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -172,7 +133,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               const SizedBox(height: AppSizes.paddingMedium),
               
               Text(
-                'We sent a verification code to\n${widget.email}',
+                'We sent a verification link to\n${widget.email}',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 16,
@@ -182,39 +143,36 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               
               const SizedBox(height: AppSizes.paddingXLarge),
               
-              // OTP Input
-              Pinput(
-                controller: _otpController,
-                length: 6,
-                defaultPinTheme: defaultPinTheme,
-                focusedPinTheme: focusedPinTheme,
-                submittedPinTheme: submittedPinTheme,
-                pinputAutovalidateMode: PinputAutovalidateMode.onSubmit,
-                showCursor: true,
-                onCompleted: (pin) => _verifyOtp(),
+              const Text(
+                'Please check your email and click the verification link to verify your account.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
               ),
               
               const SizedBox(height: AppSizes.paddingXLarge),
               
-              // Verify button
+              // Check verification button
               CustomButton(
-                text: 'Verify Email',
-                onPressed: _verifyOtp,
-                isLoading: _isLoading,
+                text: 'I\'ve Verified My Email',
+                onPressed: _checkVerificationStatus,
+                isLoading: _isChecking,
               ),
               
-              const SizedBox(height: AppSizes.paddingLarge),
+              const SizedBox(height: AppSizes.paddingMedium),
               
-              // Resend code
+              // Resend email
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text(
-                    "Didn't receive the code?",
+                    "Didn't receive the email?",
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
                   TextButton(
-                    onPressed: _isResending ? null : _resendOtp,
+                    onPressed: _isResending ? null : _resendVerificationEmail,
                     child: _isResending
                         ? const SizedBox(
                             width: 16,
@@ -251,7 +209,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     SizedBox(width: AppSizes.paddingMedium),
                     Expanded(
                       child: Text(
-                        'Check your email inbox and spam folder for the verification code.',
+                        'Check your email inbox and spam folder for the verification link.',
                         style: TextStyle(
                           color: AppColors.primary,
                           fontSize: 14,

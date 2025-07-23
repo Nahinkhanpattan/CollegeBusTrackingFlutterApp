@@ -112,12 +112,10 @@ class _DriverDashboardState extends State<DriverDashboard>
   }
 
   Future<void> _saveBusInfo() async {
-    if (_busNumberController.text.isEmpty ||
-        _startPointController.text.isEmpty ||
-        _endPointController.text.isEmpty) {
+    if (_busNumberController.text.isEmpty || _selectedRoute == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please fill all required fields'),
+          content: Text('Please enter bus number and select a route'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -129,10 +127,6 @@ class _DriverDashboardState extends State<DriverDashboard>
     
     final currentUser = authService.currentUserModel;
     if (currentUser != null) {
-      final stopPoints = _stopControllers
-          .map((controller) => controller.text.trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
 
       if (_myBus == null) {
         // Create new bus
@@ -140,9 +134,7 @@ class _DriverDashboardState extends State<DriverDashboard>
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           busNumber: _busNumberController.text.trim(),
           driverId: currentUser.id,
-          startPoint: _startPointController.text.trim(),
-          endPoint: _endPointController.text.trim(),
-          stopPoints: stopPoints,
+          routeId: _selectedRoute!.id,
           collegeId: currentUser.collegeId,
           createdAt: DateTime.now(),
         );
@@ -153,9 +145,7 @@ class _DriverDashboardState extends State<DriverDashboard>
         // Update existing bus
         await firestoreService.updateBus(_myBus!.id, {
           'busNumber': _busNumberController.text.trim(),
-          'startPoint': _startPointController.text.trim(),
-          'endPoint': _endPointController.text.trim(),
-          'stopPoints': stopPoints,
+          'routeId': _selectedRoute!.id,
           'updatedAt': DateTime.now().toIso8601String(),
         });
       }
@@ -409,13 +399,22 @@ class _DriverDashboardState extends State<DriverDashboard>
                         ),
                       ),
                       const SizedBox(height: AppSizes.paddingSmall),
-                      Text(
-                        'Route: ${_myBus!.startPoint} → ${_myBus!.endPoint}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: AppColors.textSecondary,
+                      if (_selectedRoute != null) ...[
+                        Text(
+                          'Route: ${_selectedRoute!.displayName}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
-                      ),
+                        Text(
+                          '${_selectedRoute!.startPoint} → ${_selectedRoute!.endPoint}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: AppSizes.paddingMedium),
                     ],
                     

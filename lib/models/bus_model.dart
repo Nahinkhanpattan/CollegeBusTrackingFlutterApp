@@ -4,9 +4,7 @@ class BusModel {
   final String id;
   final String busNumber;
   final String driverId;
-  final String startPoint;
-  final String endPoint;
-  final List<String> stopPoints;
+  final String? routeId;
   final String collegeId;
   final bool isActive;
   final DateTime createdAt;
@@ -16,9 +14,7 @@ class BusModel {
     required this.id,
     required this.busNumber,
     required this.driverId,
-    required this.startPoint,
-    required this.endPoint,
-    required this.stopPoints,
+    this.routeId,
     required this.collegeId,
     this.isActive = true,
     required this.createdAt,
@@ -30,9 +26,7 @@ class BusModel {
       id: id,
       busNumber: map['busNumber'] ?? '',
       driverId: map['driverId'] ?? '',
-      startPoint: map['startPoint'] ?? '',
-      endPoint: map['endPoint'] ?? '',
-      stopPoints: List<String>.from(map['stopPoints'] ?? []),
+      routeId: map['routeId'],
       collegeId: map['collegeId'] ?? '',
       isActive: map['isActive'] ?? true,
       createdAt: DateTime.parse(map['createdAt']),
@@ -44,9 +38,7 @@ class BusModel {
     return {
       'busNumber': busNumber,
       'driverId': driverId,
-      'startPoint': startPoint,
-      'endPoint': endPoint,
-      'stopPoints': stopPoints,
+      'routeId': routeId,
       'collegeId': collegeId,
       'isActive': isActive,
       'createdAt': createdAt.toIso8601String(),
@@ -58,9 +50,7 @@ class BusModel {
     String? id,
     String? busNumber,
     String? driverId,
-    String? startPoint,
-    String? endPoint,
-    List<String>? stopPoints,
+    String? routeId,
     String? collegeId,
     bool? isActive,
     DateTime? createdAt,
@@ -70,9 +60,7 @@ class BusModel {
       id: id ?? this.id,
       busNumber: busNumber ?? this.busNumber,
       driverId: driverId ?? this.driverId,
-      startPoint: startPoint ?? this.startPoint,
-      endPoint: endPoint ?? this.endPoint,
-      stopPoints: stopPoints ?? this.stopPoints,
+      routeId: routeId ?? this.routeId,
       collegeId: collegeId ?? this.collegeId,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,

@@ -404,7 +404,7 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  Future<bool> verifyEmail() async {
+  Future<bool> checkEmailVerification() async {
     try {
       await currentUser?.reload();
       if (currentUser?.emailVerified == true) {
@@ -419,7 +419,7 @@ class AuthService extends ChangeNotifier {
       }
       return false;
     } catch (e) {
-      debugPrint('Error verifying email: $e');
+      debugPrint('Error checking email verification: $e');
       return false;
     }
   }

@@ -73,8 +73,8 @@ class AppRouter {
         builder: (context, state) => const RegisterScreen(),
       ),
       GoRoute(
-        path: '/otp/:email',
-        builder: (context, state) => OtpVerificationScreen(
+        path: '/email-verification/:email',
+        builder: (context, state) => EmailVerificationScreen(
           email: state.pathParameters['email']!,
         ),
       ),

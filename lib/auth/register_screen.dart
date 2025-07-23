@@ -106,8 +106,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       if (result['success']) {
-        if (result['needsOtpVerification']) {
-          context.go('/otp/${_emailController.text.trim()}');
+        if (result['needsEmailVerification']) {
+          context.go('/email-verification/${_emailController.text.trim()}');
         } else {
           _showSuccessDialog(result['message']);
         }
