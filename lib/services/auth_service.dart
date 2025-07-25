@@ -16,64 +16,15 @@ class AuthService extends ChangeNotifier {
   UserModel? get currentUserModel => _currentUserModel;
   UserRole? get userRole => _currentUserModel?.role;
 
-  // Mock authentication for testing without Firebase
-  bool _isMockMode = true;
-  bool get isMockMode => _isMockMode;
-
-  // Dummy credentials for testing
-  static const Map<String, Map<String, dynamic>> _dummyUsers = {
-    'student@test.com': {
-      'password': '123456',
-      'fullName': 'John Student',
-      'role': UserRole.student,
-      'collegeId': 'test_college',
-      'approved': true,
-      'emailVerified': true,
-    },
-    'teacher@test.com': {
-      'password': '123456',
-      'fullName': 'Dr. Sarah Teacher',
-      'role': UserRole.teacher,
-      'collegeId': 'test_college',
-      'approved': true,
-      'emailVerified': true,
-    },
-    'driver@test.com': {
-      'password': '123456',
-      'fullName': 'Mike Driver',
-      'role': UserRole.driver,
-      'collegeId': 'test_college',
-      'approved': true,
-      'emailVerified': true,
-    },
-    'coordinator@test.com': {
-      'password': '123456',
-      'fullName': 'Lisa Coordinator',
-      'role': UserRole.busCoordinator,
-      'collegeId': 'test_college',
-      'approved': true,
-      'emailVerified': true,
-    },
-    'admin@test.com': {
-      'password': '123456',
-      'fullName': 'Admin User',
-      'role': UserRole.admin,
-      'collegeId': 'test_college',
-      'approved': true,
-      'emailVerified': true,
-    },
-  };
-
   AuthService() {
     try {
       // Check if Firebase is properly configured
       final auth = FirebaseAuth.instance;
     _auth.authStateChanges().listen(_onAuthStateChanged);
-      _isMockMode = false; // Use real Firebase
       debugPrint('AuthService: Using real Firebase authentication');
     } catch (e) {
       debugPrint('Firebase Auth not available: $e');
-      _isMockMode = true; // Fallback to mock mode
+      debugPrint('Stack trace: ${StackTrace.current}');
     }
   }
 
@@ -106,60 +57,11 @@ class AuthService extends ChangeNotifier {
       } else {
         debugPrint('User document does not exist for UID: $uid');
       }
+      notifyListeners();
     } catch (e) {
       debugPrint('Error loading user model: $e');
       debugPrint('Stack trace: ${StackTrace.current}');
     }
-  }
-
-  // Mock login method
-  Future<Map<String, dynamic>> _mockLogin({
-    required String email,
-    required String password,
-  }) async {
-    debugPrint('Mock login started for: $email');
-    await Future.delayed(const Duration(seconds: 1)); // Simulate network delay
-    
-    if (_dummyUsers.containsKey(email)) {
-      final userData = _dummyUsers[email]!;
-      debugPrint('Found user data: ${userData['fullName']}');
-      
-      if (userData['password'] == password) {
-        debugPrint('Password matches, creating user model');
-        
-        _currentUserModel = UserModel(
-          id: 'mock_${email.split('@').first}',
-          fullName: userData['fullName'],
-          email: email,
-          role: userData['role'],
-          collegeId: userData['collegeId'],
-          approved: userData['approved'],
-          emailVerified: userData['emailVerified'],
-          needsManualApproval: false,
-          createdAt: DateTime.now(),
-        );
-        
-        debugPrint('User model created: ${_currentUserModel?.fullName}');
-        debugPrint('User role: ${_currentUserModel?.role}');
-        
-        notifyListeners();
-        debugPrint('Notified listeners');
-        
-        return {
-          'success': true,
-          'message': 'Login successful.',
-        };
-      } else {
-        debugPrint('Password does not match');
-      }
-    } else {
-      debugPrint('User not found in dummy users');
-    }
-    
-    return {
-      'success': false,
-      'message': 'Invalid email or password.',
-    };
   }
 
   Future<Map<String, dynamic>> registerUser({
@@ -171,16 +73,6 @@ class AuthService extends ChangeNotifier {
     String? phoneNumber,
     String? rollNumber,
   }) async {
-    if (_isMockMode) {
-      // Mock registration
-      await Future.delayed(const Duration(seconds: 1));
-      return {
-        'success': true,
-        'needsOtpVerification': false,
-        'message': 'Registration successful. You can now login.',
-      };
-    }
-
     try {
       // Extract domain from email
       final domain = email.split('@').last;
@@ -249,21 +141,13 @@ class AuthService extends ChangeNotifier {
         throw e;
       }
 
-      if (!needsManualApproval) {
-        // Send email verification
-        await user.sendEmailVerification();
-        return {
-          'success': true,
-          'needsOtpVerification': true,
-          'message': 'Please check your email for verification code.',
-        };
-      } else {
-        return {
-          'success': true,
-          'needsOtpVerification': false,
-          'message': 'Registration successful. Awaiting approval from administrator.',
-        };
-      }
+      // Send email verification
+      await user.sendEmailVerification();
+      return {
+        'success': true,
+        'needsEmailVerification': true,
+        'message': 'Please check your email for verification code.',
+      };
     } catch (e) {
       return {
         'success': false,
@@ -295,10 +179,6 @@ class AuthService extends ChangeNotifier {
     required String email,
     required String password,
   }) async {
-    if (_isMockMode) {
-      return await _mockLogin(email: email, password: password);
-    }
-
     try {
       final userCredential = await _auth.signInWithEmailAndPassword(
         email: email,
@@ -334,56 +214,23 @@ class AuthService extends ChangeNotifier {
         };
       }
 
-      // Driver: Only allow login if approved by coordinator
-      if (role == UserRole.driver) {
-        if (!approved) {
-          return {
-            'success': false,
-            'message': 'Your account is pending approval from the bus coordinator.',
-          };
-        }
+      // For all other roles: require BOTH email verified AND approved
+      if (!emailVerified) {
         return {
-          'success': true,
-          'message': 'Login successful.',
+          'success': false,
+          'message': 'Please verify your email address first.',
+          'needsEmailVerification': true,
         };
       }
-
-      // Bus Coordinator, Teacher, Student: Check email verification and approval
-      if (role == UserRole.busCoordinator || role == UserRole.teacher || role == UserRole.student) {
-        if (!emailVerified && !approved) {
-          return {
-            'success': false,
-            'message': 'Please verify your email address first.',
-            'needsEmailVerification': true,
-          };
-        }
-        
-        if (emailVerified && !needsManualApproval) {
-          return {
-            'success': true,
-            'message': 'Login successful.',
-          };
-        }
-        
-        if (approved) {
-          return {
-            'success': true,
-            'message': 'Login successful.',
-          };
-        }
-        
-        if (needsManualApproval && !approved) {
-          return {
-            'success': false,
-            'message': 'Your account is pending approval from administrator.',
-          };
-        }
+      if (!approved) {
+        return {
+          'success': false,
+          'message': 'Your account is pending approval.',
+        };
       }
-
-      // Default fallback
       return {
-        'success': false,
-        'message': 'Login failed. Unknown user role.',
+        'success': true,
+        'message': 'Login successful.',
       };
     } catch (e) {
       debugPrint('Firebase Auth login error: $e');
@@ -430,13 +277,6 @@ class AuthService extends ChangeNotifier {
 
   Future<void> signOut() async {
     debugPrint('Signing out user');
-    if (_isMockMode) {
-      _currentUserModel = null;
-      notifyListeners();
-      debugPrint('Mock signout completed');
-      return;
-    }
-
     try {
     await _auth.signOut();
     } catch (e) {
@@ -448,10 +288,6 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> resetPassword(String email) async {
-    if (_isMockMode) {
-      // Mock password reset
-      return;
-    }
     await _auth.sendPasswordResetEmail(email: email);
   }
 }

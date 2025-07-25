@@ -8,6 +8,8 @@ import 'package:collegebus/widgets/custom_input_field.dart';
 import 'package:collegebus/widgets/custom_button.dart';
 import 'package:collegebus/utils/constants.dart';
 import 'package:collegebus/models/college_model.dart';
+import 'package:collegebus/auth/phone_otp_verification.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -79,8 +81,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email = '${_emailIdController.text.trim()}@${_emailDomainController.text.trim()}';
         collegeName = _collegeController.text.trim();
       } else if (_selectedRole == UserRole.driver) {
-        email = '';
-        collegeName = _selectedCollege?.name ?? '';
+        // Phone OTP flow for drivers
+        setState(() => _isLoading = false);
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => PhoneOtpVerificationScreen(
+              phoneNumber: phoneNumber,
+              onVerified: (user) async {
+                // Create driver user in Firestore after phone verification
+                final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+                final currentUser = user;
+                final driverUser = {
+                  'id': currentUser.uid,
+                  'fullName': _nameController.text.trim(),
+                  'email': '',
+                  'role': 'driver',
+                  'collegeId': _selectedCollege?.id ?? '',
+                  'approved': false,
+                  'emailVerified': true,
+                  'needsManualApproval': true,
+                  'createdAt': DateTime.now().toIso8601String(),
+                  'phoneNumber': phoneNumber,
+                  'rollNumber': null,
+                };
+                await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(currentUser.uid)
+                  .set(driverUser);
+                if (mounted) {
+                  context.go('/login');
+                }
+              },
+            ),
+          ),
+        );
+        return;
       } else {
         email = _emailController.text.trim();
         collegeName = _selectedCollege?.name ?? '';

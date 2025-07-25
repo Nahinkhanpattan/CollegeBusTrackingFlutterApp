@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collegebus/models/user_model.dart';
 import 'package:collegebus/models/bus_model.dart';
+import 'package:collegebus/models/route_model.dart';
 import 'package:collegebus/models/college_model.dart';
 import 'package:collegebus/models/notification_model.dart';
 import 'package:collegebus/utils/constants.dart';
@@ -9,98 +10,6 @@ import 'package:collegebus/utils/constants.dart';
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
-  // Mock data for testing without Firebase
-  static final List<BusModel> _mockBuses = [
-    BusModel(
-      id: 'bus_001',
-      busNumber: 'BUS-001',
-      driverId: 'mock_driver',
-      collegeId: 'test_college',
-      startPoint: 'Central Station',
-      endPoint: 'University Campus',
-      stopPoints: ['City Center', 'Shopping Mall', 'Hospital'],
-      isActive: true,
-      createdAt: DateTime.now().subtract(const Duration(days: 30)),
-    ),
-    BusModel(
-      id: 'bus_002',
-      busNumber: 'BUS-002',
-      driverId: 'mock_driver2',
-      collegeId: 'test_college',
-      startPoint: 'Airport',
-      endPoint: 'University Campus',
-      stopPoints: ['Hotel District', 'Business Park'],
-      isActive: true,
-      createdAt: DateTime.now().subtract(const Duration(days: 15)),
-    ),
-    BusModel(
-      id: 'bus_003',
-      busNumber: 'BUS-003',
-      driverId: 'mock_driver3',
-      collegeId: 'test_college',
-      startPoint: 'Suburban Area',
-      endPoint: 'University Campus',
-      stopPoints: ['Residential Area', 'Park'],
-      isActive: false,
-      createdAt: DateTime.now().subtract(const Duration(days: 7)),
-    ),
-  ];
-  
-  static final List<CollegeModel> _mockColleges = [
-    CollegeModel(
-      id: 'test_college',
-      name: 'Test University',
-      allowedDomains: ['test.com', 'test.edu'],
-      verified: true,
-      createdBy: 'mock_admin',
-      createdAt: DateTime.now().subtract(const Duration(days: 60)),
-    ),
-    CollegeModel(
-      id: 'another_college',
-      name: 'Another University',
-      allowedDomains: ['another.edu'],
-      verified: false,
-      createdBy: 'mock_admin',
-      createdAt: DateTime.now().subtract(const Duration(days: 30)),
-    ),
-  ];
-  
-  static final List<UserModel> _mockUsers = [
-    UserModel(
-      id: 'mock_driver',
-      fullName: 'Mike Driver',
-      email: 'driver@test.com',
-      role: UserRole.driver,
-      collegeId: 'test_college',
-      approved: true,
-      emailVerified: true,
-      needsManualApproval: false,
-      createdAt: DateTime.now().subtract(const Duration(days: 45)),
-    ),
-    UserModel(
-      id: 'mock_driver2',
-      fullName: 'John Driver',
-      email: 'driver2@test.com',
-      role: UserRole.driver,
-      collegeId: 'test_college',
-      approved: true,
-      emailVerified: true,
-      needsManualApproval: false,
-      createdAt: DateTime.now().subtract(const Duration(days: 30)),
-    ),
-    UserModel(
-      id: 'mock_driver3',
-      fullName: 'Sarah Driver',
-      email: 'driver3@test.com',
-      role: UserRole.driver,
-      collegeId: 'test_college',
-      approved: false,
-      emailVerified: true,
-      needsManualApproval: true,
-      createdAt: DateTime.now().subtract(const Duration(days: 7)),
-    ),
-  ];
-
   // User operations
   Future<UserModel?> getUser(String userId) async {
     try {
@@ -136,11 +45,7 @@ class FirestoreService {
             .map((doc) => UserModel.fromMap(doc.data(), doc.id))
             .toList());
     } catch (e) {
-      // Return mock data if Firebase is not available
-      return Stream.value(_mockUsers.where((user) => 
-        user.role == role && 
-        user.collegeId == collegeId
-      ).toList());
+      throw Exception('Error fetching users by role: $e');
     }
   }
   
@@ -153,8 +58,7 @@ class FirestoreService {
               .map((doc) => UserModel.fromMap(doc.data(), doc.id))
               .toList());
     } catch (e) {
-      // Return mock data if Firebase is not available
-      return Stream.value(_mockUsers);
+      throw Exception('Error fetching all users: $e');
     }
   }
 
@@ -170,12 +74,7 @@ class FirestoreService {
             .map((doc) => UserModel.fromMap(doc.data(), doc.id))
             .toList());
     } catch (e) {
-      // Return mock data if Firebase is not available
-      return Stream.value(_mockUsers.where((user) => 
-        user.collegeId == collegeId && 
-        user.needsManualApproval && 
-        !user.approved
-      ).toList());
+      throw Exception('Error fetching pending approvals: $e');
     }
   }
 
@@ -205,8 +104,7 @@ class FirestoreService {
             .map((doc) => CollegeModel.fromMap(doc.data(), doc.id))
             .toList());
     } catch (e) {
-      // Return mock data if Firebase is not available
-      return Stream.value(_mockColleges);
+      throw Exception('Error fetching all colleges: $e');
     }
   }
 
@@ -218,8 +116,7 @@ class FirestoreService {
         .doc(bus.id)
         .set(bus.toMap());
     } catch (e) {
-      // In mock mode, just add to mock data
-      _mockBuses.add(bus);
+      throw Exception('Error creating bus: $e');
     }
   }
 
@@ -230,19 +127,7 @@ class FirestoreService {
         .doc(busId)
         .update(data);
     } catch (e) {
-      // In mock mode, update mock data
-      final index = _mockBuses.indexWhere((bus) => bus.id == busId);
-      if (index != -1) {
-        final updatedBus = _mockBuses[index].copyWith(
-          busNumber: data['busNumber'] ?? _mockBuses[index].busNumber,
-          startPoint: data['startPoint'] ?? _mockBuses[index].startPoint,
-          endPoint: data['endPoint'] ?? _mockBuses[index].endPoint,
-          stopPoints: data['stopPoints'] ?? _mockBuses[index].stopPoints,
-          isActive: data['isActive'] ?? _mockBuses[index].isActive,
-          updatedAt: DateTime.now(),
-        );
-        _mockBuses[index] = updatedBus;
-      }
+      throw Exception('Error updating bus: $e');
     }
   }
 
@@ -259,7 +144,7 @@ class FirestoreService {
     } catch (e) {
       debugPrint('Firebase not available, using mock data: $e');
       // Return mock data if Firebase is not available
-      return Stream.value(_mockBuses.where((bus) => bus.collegeId == collegeId).toList());
+      return Stream.value([]); // No mock data, return empty stream
     }
   }
 
@@ -278,11 +163,7 @@ class FirestoreService {
       }
       return null;
     } catch (e) {
-      // Return mock data if Firebase is not available
-      final mockBus = _mockBuses.where((bus) => 
-        bus.driverId == driverId && bus.isActive
-      ).firstOrNull;
-      return mockBus;
+      throw Exception('Error fetching bus by driver: $e');
     }
   }
 
@@ -320,8 +201,7 @@ class FirestoreService {
               .map((doc) => RouteModel.fromMap(doc.data(), doc.id))
               .toList());
     } catch (e) {
-      // Return mock data if Firebase is not available
-      return Stream.value([]);
+      throw Exception('Error fetching routes by college: $e');
     }
   }
 
@@ -344,8 +224,7 @@ class FirestoreService {
         .doc(busId)
         .set(location.toMap());
     } catch (e) {
-      // In mock mode, just ignore location updates
-      // This prevents crashes when Firebase is not configured
+      throw Exception('Error updating bus location: $e');
     }
   }
 
@@ -364,12 +243,17 @@ class FirestoreService {
 
   // Notification operations
   Future<void> sendNotification(NotificationModel notification) async {
+    try {
     await _firestore
         .collection(FirebaseCollections.notifications)
         .add(notification.toMap());
+    } catch (e) {
+      throw Exception('Error sending notification: $e');
+    }
   }
 
   Stream<List<NotificationModel>> getNotifications(String userId) {
+    try {
     return _firestore
         .collection(FirebaseCollections.notifications)
         .where('receiverId', isEqualTo: userId)
@@ -379,13 +263,20 @@ class FirestoreService {
         .map((snapshot) => snapshot.docs
             .map((doc) => NotificationModel.fromMap(doc.data(), doc.id))
             .toList());
+    } catch (e) {
+      throw Exception('Error fetching notifications: $e');
+    }
   }
 
   Future<void> markNotificationAsRead(String notificationId) async {
+    try {
     await _firestore
         .collection(FirebaseCollections.notifications)
         .doc(notificationId)
         .update({'isRead': true});
+    } catch (e) {
+      throw Exception('Error marking notification as read: $e');
+    }
   }
 
   // Approval operations
@@ -401,17 +292,7 @@ class FirestoreService {
           'updatedAt': DateTime.now().toIso8601String(),
         });
     } catch (e) {
-      // In mock mode, update mock data
-      final index = _mockUsers.indexWhere((user) => user.id == userId);
-      if (index != -1) {
-        final updatedUser = _mockUsers[index].copyWith(
-          approved: true,
-          needsManualApproval: false,
-          approverId: approverId,
-          updatedAt: DateTime.now(),
-        );
-        _mockUsers[index] = updatedUser;
-      }
+      throw Exception('Error approving user: $e');
     }
   }
 
@@ -427,17 +308,7 @@ class FirestoreService {
           'updatedAt': DateTime.now().toIso8601String(),
         });
     } catch (e) {
-      // In mock mode, update mock data
-      final index = _mockUsers.indexWhere((user) => user.id == userId);
-      if (index != -1) {
-        final updatedUser = _mockUsers[index].copyWith(
-          approved: false,
-          needsManualApproval: false,
-          approverId: approverId,
-          updatedAt: DateTime.now(),
-        );
-        _mockUsers[index] = updatedUser;
-      }
+      throw Exception('Error rejecting user: $e');
     }
   }
 }

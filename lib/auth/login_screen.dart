@@ -6,6 +6,7 @@ import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/widgets/custom_input_field.dart';
 import 'package:collegebus/widgets/custom_button.dart';
 import 'package:collegebus/utils/constants.dart';
+import 'package:collegebus/auth/phone_otp_verification.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,10 +19,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _phoneController = TextEditingController();
   bool _isLoading = false;
   String? _pendingApprovalMessage;
   String? _lastTriedEmail;
   String? _lastTriedPassword;
+  UserRole _selectedRole = UserRole.student;
 
   @override
   void dispose() {
@@ -246,21 +249,79 @@ class _LoginScreenState extends State<LoginScreen> {
                 
                 const SizedBox(height: AppSizes.paddingXLarge),
                 
-                // Test credentials button (only show in mock mode)
-                if (authService.isMockMode) ...[
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: _showDummyCredentials,
-                      icon: const Icon(Icons.help_outline),
-                      label: const Text('View Test Credentials (Mock Mode)'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                      ),
+                // Role selector
+                const Text(
+                  'Select Your Role',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppSizes.paddingSmall),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSizes.paddingMedium),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+                    border: Border.all(color: Colors.grey),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<UserRole>(
+                      value: _selectedRole,
+                      isExpanded: true,
+                      items: UserRole.values
+                          .where((role) => role != UserRole.admin)
+                          .map((role) {
+                        return DropdownMenuItem(
+                          value: role,
+                          child: Text(role.displayName),
+                        );
+                      }).toList(),
+                      onChanged: (UserRole? newRole) {
+                        if (newRole != null) {
+                          setState(() => _selectedRole = newRole);
+                        }
+                      },
                     ),
                   ),
+                ),
+                const SizedBox(height: AppSizes.paddingMedium),
+                if (_selectedRole == UserRole.driver) ...[
+                  CustomInputField(
+                    label: 'Phone Number',
+                    hint: 'Enter your phone number (e.g. +919876543210)',
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    prefixIcon: const Icon(Icons.phone_outlined),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your phone number';
+                      }
+                      if (!value.startsWith('+') || value.length < 10) {
+                        return 'Enter phone in E.164 format (e.g. +919876543210)';
+                      }
+                      return null;
+                    },
+                  ),
                   const SizedBox(height: AppSizes.paddingMedium),
-                ],
-                
+                  CustomButton(
+                    text: 'Login with OTP',
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => PhoneOtpVerificationScreen(
+                            phoneNumber: _phoneController.text.trim(),
+                            onVerified: (user) async {
+                              // Optionally, check Firestore for driver user and navigate
+                              context.go('/driver');
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ] else ...[
                 // Email field
                 CustomInputField(
                   label: 'Email',
@@ -314,18 +375,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-                
                 const SizedBox(height: AppSizes.paddingLarge),
-                
                 // Login button
                 CustomButton(
                   text: AppStrings.loginButton,
                   onPressed: _handleLogin,
                   isLoading: _isLoading,
                 ),
-                
                 const SizedBox(height: AppSizes.paddingLarge),
-                
                 // Sign up link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -346,47 +403,48 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                 ),
-                if (_pendingApprovalMessage != null)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.warning.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.warning),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.info, color: AppColors.warning),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _pendingApprovalMessage!,
-                            style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Retry Login'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: AppColors.onPrimary,
-                          ),
-                          onPressed: _isLoading || _lastTriedEmail == null || _lastTriedPassword == null
-                              ? null
-                              : () => _handleLogin(email: _lastTriedEmail, password: _lastTriedPassword),
-                        ),
-                      ],
-                    ),
+              ], // <-- This closes the else ...[ block for non-driver login
+              if (_pendingApprovalMessage != null)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.warning),
                   ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.info, color: AppColors.warning),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _pendingApprovalMessage!,
+                          style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry Login'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: AppColors.onPrimary,
+                        ),
+                        onPressed: _isLoading || _lastTriedEmail == null || _lastTriedPassword == null
+                            ? null
+                            : () => _handleLogin(email: _lastTriedEmail, password: _lastTriedPassword),
+                      ),
+                    ],
+                  ),
+                ),
+            ], // <-- This closes the main Column's children
+          ), // <-- This closes the main Column
+        ), // <-- This closes the Form
+      ), // <-- This closes the SingleChildScrollView
+    ), // <-- This closes the SafeArea
+  ); // <-- This closes the Scaffold
   }
 }
 

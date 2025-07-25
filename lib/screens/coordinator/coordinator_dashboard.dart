@@ -6,6 +6,7 @@ import 'package:collegebus/services/firestore_service.dart';
 import 'package:collegebus/models/user_model.dart';
 import 'package:collegebus/models/bus_model.dart';
 import 'package:collegebus/utils/constants.dart';
+import 'package:collegebus/models/route_model.dart';
 
 class CoordinatorDashboard extends StatefulWidget {
   const CoordinatorDashboard({super.key});
@@ -19,6 +20,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
   late TabController _tabController;
   List<UserModel> _pendingDrivers = [];
   List<BusModel> _buses = [];
+  List<RouteModel> _routes = [];
 
   @override
   void initState() {
@@ -26,6 +28,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
     _tabController = TabController(length: 3, vsync: this);
     _loadPendingDrivers();
     _loadBuses();
+    _loadRoutes();
   }
 
   @override
@@ -57,6 +60,19 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
       firestoreService.getBusesByCollege(collegeId).listen((buses) {
         setState(() {
           _buses = buses;
+        });
+      });
+    }
+  }
+
+  Future<void> _loadRoutes() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+    final collegeId = authService.currentUserModel?.collegeId;
+    if (collegeId != null) {
+      firestoreService.getRoutesByCollege(collegeId).listen((routes) {
+        setState(() {
+          _routes = routes;
         });
       });
     }
@@ -96,8 +112,128 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
     }
   }
 
+  void _showCreateOrEditRouteDialog({RouteModel? route}) {
+    final isEditing = route != null;
+    final TextEditingController startController = TextEditingController(text: route?.startPoint ?? '');
+    final TextEditingController endController = TextEditingController(text: route?.endPoint ?? '');
+    List<TextEditingController> stopControllers =
+        (route?.stopPoints ?? []).map((s) => TextEditingController(text: s)).toList();
+    if (stopControllers.isEmpty) stopControllers.add(TextEditingController());
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(isEditing ? 'Edit Route' : 'Create Route'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: startController,
+                      decoration: const InputDecoration(labelText: 'Start Point'),
+                      enabled: !isEditing, // Fixed if editing
+                    ),
+                    const SizedBox(height: 8),
+                    ...stopControllers.asMap().entries.map((entry) {
+                      int idx = entry.key;
+                      TextEditingController controller = entry.value;
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: controller,
+                              decoration: InputDecoration(labelText: 'Stop ${idx + 1}'),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle, color: Colors.red),
+                            onPressed: stopControllers.length > 1
+                                ? () {
+                                    setState(() {
+                                      stopControllers.removeAt(idx);
+                                    });
+                                  }
+                                : null,
+                          ),
+                        ],
+                      );
+                    }),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add Stop'),
+                        onPressed: () {
+                          setState(() {
+                            stopControllers.add(TextEditingController());
+                          });
+                        },
+                      ),
+                    ),
+                    TextField(
+                      controller: endController,
+                      decoration: const InputDecoration(labelText: 'End Point'),
+                      enabled: !isEditing, // Fixed if editing
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+                    final authService = Provider.of<AuthService>(context, listen: false);
+                    final collegeId = authService.currentUserModel?.collegeId;
+                    if (collegeId == null) return;
+                    final stops = stopControllers.map((c) => c.text.trim()).where((s) => s.isNotEmpty).toList();
+                    if (startController.text.trim().isEmpty || endController.text.trim().isEmpty) return;
+                    if (isEditing) {
+                      await firestoreService.updateRoute(route!.id, {
+                        'stopPoints': stops,
+                        'updatedAt': DateTime.now().toIso8601String(),
+                      });
+                    } else {
+                      final newRoute = RouteModel(
+                        id: DateTime.now().millisecondsSinceEpoch.toString(),
+                        routeName: '${startController.text.trim()} - ${endController.text.trim()}',
+                        routeType: 'pickup',
+                        startPoint: startController.text.trim(),
+                        endPoint: endController.text.trim(),
+                        stopPoints: stops,
+                        collegeId: collegeId,
+                        createdBy: authService.currentUserModel?.id ?? '',
+                        isActive: true,
+                        createdAt: DateTime.now(),
+                        updatedAt: null,
+                      );
+                      await firestoreService.createRoute(newRoute);
+                    }
+                    Navigator.of(context).pop();
+                  },
+                  child: Text(isEditing ? 'Save' : 'Create'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showCreateRouteDialog() {
+    _showCreateOrEditRouteDialog();
+  }
+
   @override
   Widget build(BuildContext context) {
+    print('Building CoordinatorDashboard');
     final authService = Provider.of<AuthService>(context);
     final user = authService.currentUserModel;
 
@@ -140,7 +276,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
         controller: _tabController,
         children: [
           // Driver Approvals Tab
-          _pendingDrivers.isEmpty
+          Builder(builder: (context) { print('Building Driver Approvals Tab'); return _pendingDrivers.isEmpty
               ? const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -209,10 +345,9 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                       ),
                     );
                   },
-                ),
-          
+                ); }),
           // Bus Management Tab
-          _buses.isEmpty
+          Builder(builder: (context) { print('Building Bus Management Tab'); return _buses.isEmpty
               ? const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -264,11 +399,33 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Route: ${bus.startPoint} → ${bus.endPoint}'),
-                            Text(
-                              'Stops: ${bus.stopPoints.join(', ')}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
+                            Builder(builder: (context) {
+                              final route = _routes.firstWhere(
+                                (r) => r.id == bus.routeId,
+                                orElse: () => RouteModel(
+                                  id: '',
+                                  routeName: 'N/A',
+                                  routeType: '',
+                                  startPoint: 'N/A',
+                                  endPoint: 'N/A',
+                                  stopPoints: [],
+                                  collegeId: '',
+                                  createdBy: '',
+                                  isActive: false,
+                                  createdAt: DateTime.now(),
+                                ),
+                              );
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Route: ${route.startPoint} → ${route.endPoint}'),
+                                  Text(
+                                    'Stops: ${route.stopPoints.isNotEmpty ? route.stopPoints.join(', ') : 'N/A'}',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              );
+                            }),
                             Text(
                               'Status: ${bus.isActive ? 'Active' : 'Inactive'}',
                               style: TextStyle(
@@ -295,10 +452,9 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                       ),
                     );
                   },
-                ),
-          
+                ); }),
           // College Info Tab
-          Padding(
+          Builder(builder: (context) { print('Building College Info Tab'); return Padding(
             padding: const EdgeInsets.all(AppSizes.paddingMedium),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -366,7 +522,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                 ),
               ],
             ),
-          ),
+          ); }),
           
           // Route Management Tab
           Column(
@@ -484,7 +640,9 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                                   ),
                                 ],
                                 onSelected: (value) async {
-                                  if (value == 'delete') {
+                                  if (value == 'edit') {
+                                    _showCreateOrEditRouteDialog(route: route);
+                                  } else if (value == 'delete') {
                                     final confirmed = await showDialog<bool>(
                                       context: context,
                                       builder: (context) => AlertDialog(
@@ -505,11 +663,9 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                                         ],
                                       ),
                                     );
-                                    
                                     if (confirmed == true) {
                                       final firestoreService = Provider.of<FirestoreService>(context, listen: false);
                                       await firestoreService.deleteRoute(route.id);
-                                      
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         const SnackBar(
                                           content: Text('Route deleted successfully'),

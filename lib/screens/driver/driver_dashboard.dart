@@ -6,6 +6,7 @@ import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/services/firestore_service.dart';
 import 'package:collegebus/services/location_service.dart';
 import 'package:collegebus/models/bus_model.dart';
+import 'package:collegebus/models/route_model.dart';
 import 'package:collegebus/widgets/custom_button.dart';
 import 'package:collegebus/widgets/custom_input_field.dart';
 import 'package:collegebus/utils/constants.dart';
@@ -31,11 +32,15 @@ class _DriverDashboardState extends State<DriverDashboard>
   final _endPointController = TextEditingController();
   List<TextEditingController> _stopControllers = [];
 
+  List<RouteModel> _routes = [];
+  RouteModel? _selectedRoute;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _getCurrentLocation();
+    _loadRoutes();
     _loadMyBus();
     _addStopController(); // Add initial stop controller
   }
@@ -77,6 +82,19 @@ class _DriverDashboardState extends State<DriverDashboard>
     }
   }
 
+  Future<void> _loadRoutes() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+    final currentUser = authService.currentUserModel;
+    if (currentUser != null) {
+      firestoreService.getRoutesByCollege(currentUser.collegeId).listen((routes) {
+        setState(() {
+          _routes = routes;
+        });
+      });
+    }
+  }
+
   Future<void> _loadMyBus() async {
     final authService = Provider.of<AuthService>(context, listen: false);
     final firestoreService = Provider.of<FirestoreService>(context, listen: false);
@@ -85,23 +103,41 @@ class _DriverDashboardState extends State<DriverDashboard>
     if (currentUser != null) {
       final bus = await firestoreService.getBusByDriver(currentUser.id);
       if (bus != null) {
+        RouteModel? route;
+        if (bus.routeId != null) {
+          route = _routes.firstWhere(
+            (r) => r.id == bus.routeId,
+            orElse: () => RouteModel(
+              id: '',
+              routeName: 'N/A',
+              routeType: '',
+              startPoint: '',
+              endPoint: '',
+              stopPoints: [],
+              collegeId: '',
+              createdBy: '',
+              isActive: false,
+              createdAt: DateTime.now(),
+            ),
+          );
+        }
         setState(() {
           _myBus = bus;
           _busNumberController.text = bus.busNumber;
-          _startPointController.text = bus.startPoint;
-          _endPointController.text = bus.endPoint;
-          
+          _selectedRoute = route;
+          _startPointController.text = route?.startPoint ?? '';
+          _endPointController.text = route?.endPoint ?? '';
           // Clear existing controllers
           for (var controller in _stopControllers) {
             controller.dispose();
           }
           _stopControllers.clear();
-          
           // Add controllers for existing stops
-          for (int i = 0; i < bus.stopPoints.length; i++) {
-            _stopControllers.add(TextEditingController(text: bus.stopPoints[i]));
+          if (route != null) {
+            for (int i = 0; i < route.stopPoints.length; i++) {
+              _stopControllers.add(TextEditingController(text: route.stopPoints[i]));
+            }
           }
-          
           // Ensure at least one stop controller
           if (_stopControllers.isEmpty) {
             _addStopController();
@@ -237,13 +273,13 @@ class _DriverDashboardState extends State<DriverDashboard>
         controller: _tabController,
         children: [
           // Bus Setup Tab
-          SingleChildScrollView(
+          Padding(
             padding: const EdgeInsets.all(AppSizes.paddingMedium),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Bus Information',
+                  'Bus & Route Selection',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -251,95 +287,70 @@ class _DriverDashboardState extends State<DriverDashboard>
                   ),
                 ),
                 const SizedBox(height: AppSizes.paddingLarge),
-                
-                CustomInputField(
-                  label: 'Bus Number',
-                  hint: 'Enter bus number (e.g., ABC-102)',
-                  controller: _busNumberController,
-                  prefixIcon: const Icon(Icons.directions_bus),
-                ),
-                
-                const SizedBox(height: AppSizes.paddingMedium),
-                
-                CustomInputField(
-                  label: 'Start Point',
-                  hint: 'Enter starting location',
-                  controller: _startPointController,
-                  prefixIcon: const Icon(Icons.location_on),
-                ),
-                
-                const SizedBox(height: AppSizes.paddingMedium),
-                
-                CustomInputField(
-                  label: 'End Point',
-                  hint: 'Enter destination',
-                  controller: _endPointController,
-                  prefixIcon: const Icon(Icons.flag),
-                ),
-                
-                const SizedBox(height: AppSizes.paddingMedium),
-                
-                // Stop Points with dynamic fields
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Stop Points',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textPrimary,
-                      ),
+                if (_myBus == null) ...[
+                  DropdownButtonFormField<RouteModel>(
+                    value: _selectedRoute,
+                    items: _routes.map((route) => DropdownMenuItem(
+                      value: route,
+                      child: Text(route.displayName),
+                    )).toList(),
+                    onChanged: (route) {
+                      setState(() {
+                        _selectedRoute = route;
+                      });
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Select Route',
+                      border: OutlineInputBorder(),
                     ),
-                    IconButton(
-                      onPressed: _addStopController,
-                      icon: const Icon(Icons.add_circle, color: AppColors.primary),
-                      tooltip: 'Add Stop',
+                  ),
+                  const SizedBox(height: AppSizes.paddingLarge),
+                  CustomButton(
+                    text: 'Assign Bus',
+                    onPressed: () async {
+                      if (_selectedRoute == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please select a route'),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                        return;
+                      }
+                      final authService = Provider.of<AuthService>(context, listen: false);
+                      final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+                      final currentUser = authService.currentUserModel;
+                      if (currentUser == null) return;
+                      final newBus = BusModel(
+                        id: DateTime.now().millisecondsSinceEpoch.toString(),
+                        busNumber: 'Bus for ${currentUser.fullName}',
+                        driverId: currentUser.id,
+                        routeId: _selectedRoute!.id,
+                        collegeId: currentUser.collegeId,
+                        createdAt: DateTime.now(),
+                      );
+                      await firestoreService.createBus(newBus);
+                      setState(() => _myBus = newBus);
+                    },
+                    icon: const Icon(Icons.directions_bus),
+                  ),
+                ] else ...[
+                  Text(
+                    'Bus: ${_myBus!.busNumber}',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: AppSizes.paddingSmall),
+                  if (_selectedRoute != null) ...[
+                    Text(
+                      'Route: ${_selectedRoute!.displayName}',
+                      style: const TextStyle(fontSize: 16, color: AppColors.textSecondary),
+                    ),
+                    Text(
+                      '${_selectedRoute!.startPoint} → ${_selectedRoute!.endPoint}',
+                      style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
                     ),
                   ],
-                ),
-                
-                const SizedBox(height: AppSizes.paddingSmall),
-                
-                // Dynamic stop point fields
-                ..._stopControllers.asMap().entries.map((entry) {
-                  int index = entry.key;
-                  TextEditingController controller = entry.value;
-                  
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: AppSizes.paddingSmall),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: CustomInputField(
-                            label: 'Stop ${index + 1}',
-                            hint: 'Enter stop name',
-                            controller: controller,
-                            prefixIcon: const Icon(Icons.stop),
-                          ),
-                        ),
-                        if (_stopControllers.length > 1)
-                          IconButton(
-                            onPressed: () => _removeStopController(index),
-                            icon: const Icon(Icons.remove_circle, color: AppColors.error),
-                            tooltip: 'Remove Stop',
-                          ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                ),
-                
-                const SizedBox(height: AppSizes.paddingLarge),
-                
-                CustomButton(
-                  text: _myBus == null ? 'Create Bus Route' : 'Update Bus Route',
-                  onPressed: _saveBusInfo,
-                  icon: Icon(
-                    _myBus == null ? Icons.add : Icons.update,
-                    color: AppColors.onPrimary,
-                  ),
-                ),
+                ],
               ],
             ),
           ),

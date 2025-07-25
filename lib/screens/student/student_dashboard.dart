@@ -6,6 +6,7 @@ import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/services/firestore_service.dart';
 import 'package:collegebus/services/location_service.dart';
 import 'package:collegebus/models/bus_model.dart';
+import 'package:collegebus/models/route_model.dart';
 import 'package:collegebus/models/notification_model.dart';
 import 'package:collegebus/widgets/custom_button.dart';
 import 'package:collegebus/utils/constants.dart';
@@ -30,14 +31,30 @@ class _StudentDashboardState extends State<StudentDashboard>
   Set<Polyline> _polylines = {};
   String? _selectedStop;
   String? _selectedBusNumber;
+  List<RouteModel> _routes = [];
 
   // Get unique stops from all buses
   List<String> get _allStops {
     final stops = <String>{};
     for (final bus in _allBuses) {
-      stops.add(bus.startPoint);
-      stops.add(bus.endPoint);
-      stops.addAll(bus.stopPoints);
+      final route = _routes.firstWhere(
+        (r) => r.id == bus.routeId,
+        orElse: () => RouteModel(
+          id: '',
+          routeName: 'N/A',
+          routeType: '',
+          startPoint: '',
+          endPoint: '',
+          stopPoints: [],
+          collegeId: '',
+          createdBy: '',
+          isActive: false,
+          createdAt: DateTime.now(),
+        ),
+      );
+      stops.add(route.startPoint);
+      stops.add(route.endPoint);
+      stops.addAll(route.stopPoints);
     }
     return stops.toList()..sort();
   }
@@ -52,6 +69,7 @@ class _StudentDashboardState extends State<StudentDashboard>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _getCurrentLocation();
+    _loadRoutes();
     _loadBuses();
   }
 
@@ -88,15 +106,44 @@ class _StudentDashboardState extends State<StudentDashboard>
     }
   }
 
+  Future<void> _loadRoutes() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+    final collegeId = authService.currentUserModel?.collegeId;
+    if (collegeId != null) {
+      firestoreService.getRoutesByCollege(collegeId).listen((routes) {
+        setState(() {
+          _routes = routes;
+        });
+      });
+    }
+  }
+
   void _applyFilters() {
     List<BusModel> filtered = List.from(_allBuses);
 
     // Filter by selected stop
     if (_selectedStop != null) {
       filtered = filtered.where((bus) {
-        return bus.startPoint == _selectedStop ||
-               bus.endPoint == _selectedStop ||
-               bus.stopPoints.contains(_selectedStop);
+        final route = _routes.firstWhere(
+          (r) => r.id == bus.routeId,
+          orElse: () => RouteModel(
+            id: '',
+            routeName: 'N/A',
+            routeType: '',
+            startPoint: '',
+            endPoint: '',
+            stopPoints: [],
+            collegeId: '',
+            createdBy: '',
+            isActive: false,
+            createdAt: DateTime.now(),
+          ),
+        );
+        // Show bus if the stop is start, end, or any stop in between
+        return route.startPoint == _selectedStop ||
+               route.endPoint == _selectedStop ||
+               route.stopPoints.contains(_selectedStop);
       }).toList();
     }
 
@@ -113,7 +160,7 @@ class _StudentDashboardState extends State<StudentDashboard>
   void _updateMarkers() {
     final newMarkers = <Marker>{};
 
-    // Add current location marker
+    // Always show current location marker
     if (_currentLocation != null) {
       newMarkers.add(
         Marker(
@@ -125,10 +172,18 @@ class _StudentDashboardState extends State<StudentDashboard>
       );
     }
 
-    // Add bus markers for filtered buses
+    // Show all filtered buses as markers (even if no bus is selected)
     for (final bus in _filteredBuses) {
       _addBusMarker(bus, newMarkers);
-      _addBusRoutePolyline(bus);
+    }
+
+    // If a bus is selected, show its route polyline and stops
+    if (_selectedBus != null) {
+      _addBusRoutePolyline(_selectedBus!);
+    } else {
+      setState(() {
+        _polylines = {};
+      });
     }
 
     setState(() {
@@ -143,14 +198,29 @@ class _StudentDashboardState extends State<StudentDashboard>
       
       // Add mock coordinates for demonstration
       // In a real app, you'd get actual coordinates for each stop
-      final startCoord = _getMockCoordinateForLocation(bus.startPoint);
+      final route = _routes.firstWhere(
+        (r) => r.id == bus.routeId,
+        orElse: () => RouteModel(
+          id: '',
+          routeName: 'N/A',
+          routeType: '',
+          startPoint: '',
+          endPoint: '',
+          stopPoints: [],
+          collegeId: '',
+          createdBy: '',
+          isActive: false,
+          createdAt: DateTime.now(),
+        ),
+      );
+      final startCoord = _getMockCoordinateForLocation(route.startPoint);
       routePoints.add(startCoord);
       
-      for (final stop in bus.stopPoints) {
+      for (final stop in route.stopPoints) {
         routePoints.add(_getMockCoordinateForLocation(stop));
       }
       
-      final endCoord = _getMockCoordinateForLocation(bus.endPoint);
+      final endCoord = _getMockCoordinateForLocation(route.endPoint);
       routePoints.add(endCoord);
       
       final polyline = Polyline(
@@ -167,9 +237,9 @@ class _StudentDashboardState extends State<StudentDashboard>
       
       // Add stop markers
       for (int i = 0; i < routePoints.length; i++) {
-        final stopName = i == 0 ? bus.startPoint : 
-                        i == routePoints.length - 1 ? bus.endPoint :
-                        bus.stopPoints[i - 1];
+        final stopName = i == 0 ? route.startPoint : 
+                        i == routePoints.length - 1 ? route.endPoint :
+                        route.stopPoints[i - 1];
         
         _markers.add(
           Marker(
@@ -212,6 +282,21 @@ class _StudentDashboardState extends State<StudentDashboard>
 
   void _addBusMarker(BusModel bus, Set<Marker> markers) {
     final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+    final route = _routes.firstWhere(
+      (r) => r.id == bus.routeId,
+      orElse: () => RouteModel(
+        id: '',
+        routeName: 'N/A',
+        routeType: '',
+        startPoint: '',
+        endPoint: '',
+        stopPoints: [],
+        collegeId: '',
+        createdBy: '',
+        isActive: false,
+        createdAt: DateTime.now(),
+      ),
+    );
     
     // Listen to real-time location updates for this bus
     firestoreService.getBusLocation(bus.id).listen((location) {
@@ -221,7 +306,7 @@ class _StudentDashboardState extends State<StudentDashboard>
           position: location.currentLocation,
           infoWindow: InfoWindow(
             title: 'Bus ${bus.busNumber} ${bus.isActive ? "(Live)" : "(Not Live)"}',
-            snippet: '${bus.startPoint} → ${bus.endPoint}\nLast updated: ${location.timestamp.toString().substring(11, 16)}',
+            snippet: '${route.startPoint} → ${route.endPoint}\nLast updated: ${location.timestamp.toString().substring(11, 16)}',
           ),
           icon: BitmapDescriptor.defaultMarkerWithHue(
             _selectedBus?.id == bus.id ? BitmapDescriptor.hueRed : 
@@ -236,13 +321,13 @@ class _StudentDashboardState extends State<StudentDashboard>
         });
       } else {
         // Show bus at start point if no live location
-        final startLocation = _getMockCoordinateForLocation(bus.startPoint);
+        final startLocation = _getMockCoordinateForLocation(route.startPoint);
         final marker = Marker(
           markerId: MarkerId('bus_${bus.id}'),
           position: startLocation,
           infoWindow: InfoWindow(
             title: 'Bus ${bus.busNumber} (Not Live)',
-            snippet: '${bus.startPoint} → ${bus.endPoint}\nStatus: Offline',
+            snippet: '${route.startPoint} → ${route.endPoint}\nStatus: Offline',
           ),
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
           onTap: () => _selectBus(bus),
@@ -498,7 +583,7 @@ class _StudentDashboardState extends State<StudentDashboard>
                       ),
                       const SizedBox(height: AppSizes.paddingSmall),
                       Text(
-                        'Route: ${_selectedBus!.startPoint} → ${_selectedBus!.endPoint}',
+                        'Route: ${_routes.firstWhere((r) => r.id == _selectedBus!.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).startPoint} → ${_routes.firstWhere((r) => r.id == _selectedBus!.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).endPoint}',
                         style: const TextStyle(
                           fontSize: 16,
                           color: AppColors.textSecondary,
@@ -513,10 +598,10 @@ class _StudentDashboardState extends State<StudentDashboard>
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      if (_selectedBus!.stopPoints.isNotEmpty) ...[
+                      if ((_routes.firstWhere((r) => r.id == _selectedBus!.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).stopPoints.isNotEmpty)) ...[
                         const SizedBox(height: AppSizes.paddingSmall),
                         Text(
-                          'Stops: ${_selectedBus!.stopPoints.join(' → ')}',
+                          'Stops: ${_routes.firstWhere((r) => r.id == _selectedBus!.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).stopPoints.join(' → ')}',
                           style: const TextStyle(
                             fontSize: 14,
                             color: AppColors.textSecondary,
@@ -609,10 +694,10 @@ class _StudentDashboardState extends State<StudentDashboard>
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('${bus.startPoint} → ${bus.endPoint}'),
-                            if (bus.stopPoints.isNotEmpty)
+                            Text('${_routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).startPoint} → ${_routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).endPoint}'),
+                            if ((_routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).stopPoints.isNotEmpty))
                               Text(
-                                'Stops: ${bus.stopPoints.join(', ')}',
+                                'Stops: ${_routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).stopPoints.join(', ')}',
                                 style: const TextStyle(fontSize: 12),
                               ),
                           ],
@@ -624,7 +709,7 @@ class _StudentDashboardState extends State<StudentDashboard>
                           _selectBus(bus);
                           _tabController.animateTo(0); // Switch to map tab
                         },
-                        isThreeLine: bus.stopPoints.isNotEmpty,
+                        isThreeLine: _routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).stopPoints.isNotEmpty,
                       ),
                     );
                   },

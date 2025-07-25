@@ -1,4 +1,5 @@
 import 'package:collegebus/utils/constants.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserModel {
   final String id;
@@ -32,30 +33,30 @@ class UserModel {
   });
 
   factory UserModel.fromMap(Map<String, dynamic> map, String id) {
-    try {
+    DateTime parseDate(dynamic value) {
+      if (value is Timestamp) {
+        return value.toDate();
+      } else if (value is String) {
+        return DateTime.parse(value);
+      } else {
+        return DateTime.now();
+      }
+    }
+
     return UserModel(
       id: id,
       fullName: map['fullName'] ?? '',
       email: map['email'] ?? '',
-      role: UserRole.values.firstWhere(
-        (e) => e.value == map['role'],
-        orElse: () => UserRole.student,
-      ),
+      role: fromUserRoleValue(map['role']),
       collegeId: map['collegeId'] ?? '',
       approved: map['approved'] ?? false,
       emailVerified: map['emailVerified'] ?? false,
       needsManualApproval: map['needsManualApproval'] ?? false,
-      approverId: map['approverId'],
-      createdAt: DateTime.parse(map['createdAt']),
-      updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt']) : null,
+      createdAt: parseDate(map['createdAt']),
+      updatedAt: map['updatedAt'] != null ? parseDate(map['updatedAt']) : null,
       phoneNumber: map['phoneNumber'],
       rollNumber: map['rollNumber'],
     );
-    } catch (e) {
-      print('Error parsing UserModel from map: $e');
-      print('Map data: $map');
-      rethrow;
-    }
   }
 
   Map<String, dynamic> toMap() {
@@ -106,4 +107,15 @@ class UserModel {
       rollNumber: rollNumber ?? this.rollNumber,
     );
   }
+}
+
+UserRole fromUserRoleValue(dynamic value) {
+  if (value is UserRole) return value;
+  if (value is String) {
+    return UserRole.values.firstWhere(
+      (e) => e.value == value,
+      orElse: () => UserRole.student,
+    );
+  }
+  return UserRole.student;
 }
