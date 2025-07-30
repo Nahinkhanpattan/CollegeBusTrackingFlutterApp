@@ -34,7 +34,6 @@ class LocationService {
 
       return LatLng(position.latitude, position.longitude);
     } catch (e) {
-      debugPrint('Error getting current location: $e');
       return null;
     }
   }
@@ -63,7 +62,6 @@ class LocationService {
         onLocationUpdate(latLng);
       });
     } catch (e) {
-      debugPrint('Error starting location tracking: $e');
     }
   }
 

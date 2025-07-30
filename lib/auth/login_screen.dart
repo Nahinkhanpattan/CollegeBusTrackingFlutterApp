@@ -5,6 +5,7 @@ import 'package:email_validator/email_validator.dart';
 import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/widgets/custom_input_field.dart';
 import 'package:collegebus/widgets/custom_button.dart';
+import 'package:collegebus/widgets/phone_input_field.dart';
 import 'package:collegebus/utils/constants.dart';
 import 'package:collegebus/auth/phone_otp_verification.dart';
 
@@ -47,19 +48,13 @@ class _LoginScreenState extends State<LoginScreen> {
       final loginPassword = password ?? _passwordController.text;
       _lastTriedEmail = loginEmail;
       _lastTriedPassword = loginPassword;
-      print('Attempting login with: $loginEmail');
       
       final result = await authService.loginUser(
         email: loginEmail,
         password: loginPassword,
       );
 
-      print('Login result: $result');
-
       if (result['success']) {
-        print('Login successful, user role: ${authService.userRole}');
-        print('Current user model: ${authService.currentUserModel?.fullName}');
-        // Force navigation by calling context.go with the appropriate route
         final userRole = authService.userRole;
         String route = '/login'; // default fallback
         
@@ -83,7 +78,6 @@ class _LoginScreenState extends State<LoginScreen> {
             route = '/login';
             break;
         }
-        print('Navigating to: $route');
         context.go(route);
       } else {
         _showErrorSnackBar(result['message']);
@@ -97,7 +91,6 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } catch (e) {
-      print('Login error: $e');
       _showErrorSnackBar('An error occurred. Please try again.');
     } finally {
       setState(() => _isLoading = false);
@@ -288,30 +281,42 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: AppSizes.paddingMedium),
                 if (_selectedRole == UserRole.driver) ...[
-                  CustomInputField(
-                    label: 'Phone Number',
-                    hint: 'Enter your phone number (e.g. +919876543210)',
+                  // Phone number input with country code
+                  PhoneInputField(
                     controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    prefixIcon: const Icon(Icons.phone_outlined),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your phone number';
-                      }
-                      if (!value.startsWith('+') || value.length < 10) {
-                        return 'Enter phone in E.164 format (e.g. +919876543210)';
-                      }
-                      return null;
-                    },
+                    label: 'Phone Number',
+                    hint: '9876543210',
                   ),
                   const SizedBox(height: AppSizes.paddingMedium),
                   CustomButton(
                     text: 'Login with OTP',
                     onPressed: () {
+                      // Validate phone number
+                      final phoneNumber = _phoneController.text.trim();
+                      if (phoneNumber.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter your phone number'),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                        return;
+                      }
+                      
+                      if (phoneNumber.length < 10) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter a valid 10-digit phone number'),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                        return;
+                      }
+                      
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (context) => PhoneOtpVerificationScreen(
-                            phoneNumber: _phoneController.text.trim(),
+                            phoneNumber: phoneNumber, // Pass just the number, +91 will be added in OTP screen
                             onVerified: (user) async {
                               // Optionally, check Firestore for driver user and navigate
                               context.go('/driver');

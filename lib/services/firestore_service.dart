@@ -142,8 +142,6 @@ class FirestoreService {
             .map((doc) => BusModel.fromMap(doc.data(), doc.id))
             .toList());
     } catch (e) {
-      debugPrint('Firebase not available, using mock data: $e');
-      // Return mock data if Firebase is not available
       return Stream.value([]); // No mock data, return empty stream
     }
   }

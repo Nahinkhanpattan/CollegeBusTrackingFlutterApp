@@ -22,45 +22,29 @@ class AppRouter {
                           state.matchedLocation == '/register' ||
                           state.matchedLocation.startsWith('/otp');
 
-      print('Router redirect called:');
-      print('  Current location: ${state.matchedLocation}');
-      print('  Is logged in: $isLoggedIn');
-      print('  Is login route: $isLoginRoute');
-      print('  Current user model: ${authService.currentUserModel?.fullName}');
-      print('  User role: ${authService.userRole}');
-
       if (!isLoggedIn && !isLoginRoute) {
-        print('  Redirecting to login');
         return '/login';
       }
       
       if (isLoggedIn && isLoginRoute) {
         // Redirect to appropriate dashboard based on user role
         final userRole = authService.userRole;
-        print('  User is logged in, redirecting based on role: $userRole');
         switch (userRole) {
           case UserRole.student:
-            print('  Redirecting to student dashboard');
             return '/student';
           case UserRole.teacher:
-            print('  Redirecting to teacher dashboard');
             return '/teacher';
           case UserRole.driver:
-            print('  Redirecting to driver dashboard');
             return '/driver';
           case UserRole.busCoordinator:
-            print('  Redirecting to coordinator dashboard');
             return '/coordinator';
           case UserRole.admin:
-            print('  Redirecting to admin dashboard');
             return '/admin';
           default:
-            print('  Unknown role, redirecting to login');
             return '/login';
         }
       }
       
-      print('  No redirect needed');
       return null;
     },
     routes: [

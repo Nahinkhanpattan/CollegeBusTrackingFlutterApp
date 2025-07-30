@@ -233,7 +233,6 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
 
   @override
   Widget build(BuildContext context) {
-    print('Building CoordinatorDashboard');
     final authService = Provider.of<AuthService>(context);
     final user = authService.currentUserModel;
 
@@ -276,7 +275,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
         controller: _tabController,
         children: [
           // Driver Approvals Tab
-          Builder(builder: (context) { print('Building Driver Approvals Tab'); return _pendingDrivers.isEmpty
+          _pendingDrivers.isEmpty
               ? const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -345,9 +344,9 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                       ),
                     );
                   },
-                ); }),
+                ),
           // Bus Management Tab
-          Builder(builder: (context) { print('Building Bus Management Tab'); return _buses.isEmpty
+          _buses.isEmpty
               ? const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -452,9 +451,9 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                       ),
                     );
                   },
-                ); }),
+                ),
           // College Info Tab
-          Builder(builder: (context) { print('Building College Info Tab'); return Padding(
+          Padding(
             padding: const EdgeInsets.all(AppSizes.paddingMedium),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -522,7 +521,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                 ),
               ],
             ),
-          ); }),
+          ),
           
           // Route Management Tab
           Column(

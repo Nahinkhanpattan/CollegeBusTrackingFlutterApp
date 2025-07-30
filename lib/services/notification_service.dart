@@ -69,7 +69,6 @@ class NotificationService {
   }
 
   static Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    debugPrint('Received foreground message: ${message.messageId}');
     
     // Show local notification when app is in foreground
     await _showLocalNotification(
@@ -80,16 +79,16 @@ class NotificationService {
   }
 
   static Future<void> _handleBackgroundMessage(RemoteMessage message) async {
-    debugPrint('Received background message: ${message.messageId}');
+    
   }
 
   static void _handleNotificationTap(RemoteMessage message) {
-    debugPrint('Notification tapped: ${message.messageId}');
+    
     // Handle navigation based on notification data
   }
 
   static void _onNotificationTapped(NotificationResponse response) {
-    debugPrint('Local notification tapped: ${response.payload}');
+    
     // Handle local notification tap
   }
 
@@ -131,7 +130,6 @@ class NotificationService {
     try {
       return await _messaging.getToken();
     } catch (e) {
-      debugPrint('Error getting device token: $e');
       return null;
     }
   }
@@ -140,7 +138,6 @@ class NotificationService {
     try {
       await _messaging.subscribeToTopic(topic);
     } catch (e) {
-      debugPrint('Error subscribing to topic: $e');
     }
   }
 
@@ -148,7 +145,6 @@ class NotificationService {
     try {
       await _messaging.unsubscribeFromTopic(topic);
     } catch (e) {
-      debugPrint('Error unsubscribing from topic: $e');
     }
   }
 

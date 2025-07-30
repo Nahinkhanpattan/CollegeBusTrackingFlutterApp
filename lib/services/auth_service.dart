@@ -21,7 +21,6 @@ class AuthService extends ChangeNotifier {
       // Check if Firebase is properly configured
       final auth = FirebaseAuth.instance;
     _auth.authStateChanges().listen(_onAuthStateChanged);
-      debugPrint('AuthService: Using real Firebase authentication');
     } catch (e) {
       debugPrint('Firebase Auth not available: $e');
       debugPrint('Stack trace: ${StackTrace.current}');
@@ -30,14 +29,12 @@ class AuthService extends ChangeNotifier {
 
   Future<void> _onAuthStateChanged(User? user) async {
     try {
-      debugPrint('Auth state changed for user: ${user?.email}');
     if (user != null) {
       await _loadUserModel(user.uid);
     } else {
       _currentUserModel = null;
     }
     notifyListeners();
-      debugPrint('Auth state change completed');
     } catch (e) {
       debugPrint('Error in _onAuthStateChanged: $e');
       debugPrint('Stack trace: ${StackTrace.current}');
@@ -46,14 +43,10 @@ class AuthService extends ChangeNotifier {
 
   Future<void> _loadUserModel(String uid) async {
     try {
-      debugPrint('Loading user model for UID: $uid');
       final doc = await _firestore.collection(FirebaseCollections.users).doc(uid).get();
-      debugPrint('Document exists: ${doc.exists}');
       if (doc.exists) {
         final data = doc.data()!;
-        debugPrint('User data: $data');
         _currentUserModel = UserModel.fromMap(data, uid);
-        debugPrint('User model loaded: ${_currentUserModel?.fullName}');
       } else {
         debugPrint('User document does not exist for UID: $uid');
       }
@@ -125,16 +118,12 @@ class AuthService extends ChangeNotifier {
         rollNumber: rollNumber,
       );
 
-      debugPrint('Creating user document for UID: ${user.uid}');
-      debugPrint('User model data: ${userModel.toMap()}');
-      
       try {
       await _firestore
           .collection(FirebaseCollections.users)
           .doc(user.uid)
           .set(userModel.toMap());
         
-        debugPrint('User document created successfully');
       } catch (e) {
         debugPrint('Error creating user document: $e');
         debugPrint('Stack trace: ${StackTrace.current}');
@@ -276,7 +265,6 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    debugPrint('Signing out user');
     try {
     await _auth.signOut();
     } catch (e) {
@@ -284,7 +272,6 @@ class AuthService extends ChangeNotifier {
     }
     _currentUserModel = null;
     notifyListeners();
-    debugPrint('Firebase signout completed');
   }
 
   Future<void> resetPassword(String email) async {

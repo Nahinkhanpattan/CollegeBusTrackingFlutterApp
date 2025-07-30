@@ -14,17 +14,12 @@ void main() async {
   
   try {
   await Firebase.initializeApp();
-    print('Firebase initialized successfully');
   } catch (e) {
-    print('Firebase initialization failed: $e');
-    print('Please set up Firebase configuration for your project');
   }
   
   try {
   await NotificationService.initialize();
-    print('Notification service initialized successfully');
   } catch (e) {
-    print('Notification service initialization failed: $e');
   }
   
   runApp(const MyApp());
