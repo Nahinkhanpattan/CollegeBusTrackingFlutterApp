@@ -12,7 +12,16 @@
           "package_name": "com.example.collegebus"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "670144541497-2ciu7crf97bbbs8rla4k8lv1ki778su0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.collegebus",
+            "certificate_hash": "a438f5e953f547f1024d62676f96b772f3bd3c78"
+          }
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyALKYuU_cpEV_rjyZDX6POB30GC-oASDVU"

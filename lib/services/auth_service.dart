@@ -4,12 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collegebus/models/user_model.dart';
 import 'package:collegebus/models/college_model.dart';
 import 'package:collegebus/utils/constants.dart';
-import 'package:collegebus/services/firestore_service.dart';
 
 class AuthService extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirestoreService _firestoreService = FirestoreService();
 
   User? get currentUser => _auth.currentUser;
   UserModel? _currentUserModel;
@@ -19,11 +17,9 @@ class AuthService extends ChangeNotifier {
   AuthService() {
     try {
       // Check if Firebase is properly configured
-      final auth = FirebaseAuth.instance;
-    _auth.authStateChanges().listen(_onAuthStateChanged);
+      _auth.authStateChanges().listen(_onAuthStateChanged);
     } catch (e) {
-      debugPrint('Firebase Auth not available: $e');
-      debugPrint('Stack trace: ${StackTrace.current}');
+      // Firebase Auth not available, but app can continue
     }
   }
 
@@ -36,8 +32,7 @@ class AuthService extends ChangeNotifier {
     }
     notifyListeners();
     } catch (e) {
-      debugPrint('Error in _onAuthStateChanged: $e');
-      debugPrint('Stack trace: ${StackTrace.current}');
+      // Error in auth state change, but app can continue
     }
   }
 
@@ -48,12 +43,10 @@ class AuthService extends ChangeNotifier {
         final data = doc.data()!;
         _currentUserModel = UserModel.fromMap(data, uid);
       } else {
-        debugPrint('User document does not exist for UID: $uid');
       }
       notifyListeners();
     } catch (e) {
-      debugPrint('Error loading user model: $e');
-      debugPrint('Stack trace: ${StackTrace.current}');
+      // Error loading user model, but app can continue
     }
   }
 
@@ -76,19 +69,16 @@ class AuthService extends ChangeNotifier {
           .where('allowedDomains', arrayContains: domain)
           .get();
 
-      bool needsManualApproval = true;
       String collegeId = '';
 
       if (collegeQuery.docs.isNotEmpty) {
         // College exists and domain is allowed
-        needsManualApproval = false;
         collegeId = collegeQuery.docs.first.id;
       } else {
         // Check if it's an academic domain (.ac.in)
         if (domain.endsWith('.ac.in') && role == UserRole.busCoordinator) {
           // Create new college for coordinator with academic domain
           collegeId = await _createCollege(collegeName, domain, '');
-          needsManualApproval = false;
         } else {
           // Use a default college ID or create one
           collegeId = collegeName.toLowerCase().replaceAll(' ', '_');
@@ -110,9 +100,8 @@ class AuthService extends ChangeNotifier {
         email: email,
         role: role,
         collegeId: collegeId,
-        approved: !needsManualApproval,
+        approved: false, // Registration is always manual approval
         emailVerified: false,
-        needsManualApproval: needsManualApproval,
         createdAt: DateTime.now(),
         phoneNumber: phoneNumber,
         rollNumber: rollNumber,
@@ -125,9 +114,7 @@ class AuthService extends ChangeNotifier {
           .set(userModel.toMap());
         
       } catch (e) {
-        debugPrint('Error creating user document: $e');
-        debugPrint('Stack trace: ${StackTrace.current}');
-        throw e;
+        rethrow;
       }
 
       // Send email verification
@@ -187,7 +174,6 @@ class AuthService extends ChangeNotifier {
       final role = _currentUserModel!.role;
       final approved = _currentUserModel!.approved;
       final emailVerified = _currentUserModel!.emailVerified || user.emailVerified;
-      final needsManualApproval = _currentUserModel!.needsManualApproval;
 
       // Admin: Only allow login if approved
       if (role == UserRole.admin) {
@@ -222,7 +208,6 @@ class AuthService extends ChangeNotifier {
         'message': 'Login successful.',
       };
     } catch (e) {
-      debugPrint('Firebase Auth login error: $e');
       String errorMessage = 'Login failed. Please check your credentials.';
       
       if (e.toString().contains('invalid-credentials')) {
@@ -255,7 +240,6 @@ class AuthService extends ChangeNotifier {
       }
       return false;
     } catch (e) {
-      debugPrint('Error checking email verification: $e');
       return false;
     }
   }
@@ -268,7 +252,7 @@ class AuthService extends ChangeNotifier {
     try {
     await _auth.signOut();
     } catch (e) {
-      debugPrint('Error signing out: $e');
+      // Error signing out, but app can continue
     }
     _currentUserModel = null;
     notifyListeners();

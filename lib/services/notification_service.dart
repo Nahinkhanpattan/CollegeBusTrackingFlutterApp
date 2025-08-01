@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -79,17 +78,15 @@ class NotificationService {
   }
 
   static Future<void> _handleBackgroundMessage(RemoteMessage message) async {
-    
+    // Handle background message - implementation will be added in future updates
   }
 
   static void _handleNotificationTap(RemoteMessage message) {
-    
-    // Handle navigation based on notification data
+    // Handle notification tap - implementation will be added in future updates
   }
 
   static void _onNotificationTapped(NotificationResponse response) {
-    
-    // Handle local notification tap
+    // Handle local notification tap - implementation will be added in future updates
   }
 
   static Future<void> _showLocalNotification({
@@ -138,6 +135,7 @@ class NotificationService {
     try {
       await _messaging.subscribeToTopic(topic);
     } catch (e) {
+      // Topic subscription failed, but app can continue
     }
   }
 
@@ -145,6 +143,7 @@ class NotificationService {
     try {
       await _messaging.unsubscribeFromTopic(topic);
     } catch (e) {
+      // Topic unsubscription failed, but app can continue
     }
   }
 

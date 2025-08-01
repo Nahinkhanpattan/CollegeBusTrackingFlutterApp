@@ -85,6 +85,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
     final currentUser = authService.currentUserModel;
     if (currentUser != null) {
       await firestoreService.approveUser(driver.id, currentUser.id);
+      if (!mounted) return;
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -102,6 +103,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
     final currentUser = authService.currentUserModel;
     if (currentUser != null) {
       await firestoreService.rejectUser(driver.id, currentUser.id);
+      if (!mounted) return;
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -195,10 +197,11 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                     final stops = stopControllers.map((c) => c.text.trim()).where((s) => s.isNotEmpty).toList();
                     if (startController.text.trim().isEmpty || endController.text.trim().isEmpty) return;
                     if (isEditing) {
-                      await firestoreService.updateRoute(route!.id, {
+                      await firestoreService.updateRoute(route.id, {
                         'stopPoints': stops,
                         'updatedAt': DateTime.now().toIso8601String(),
                       });
+                      if (!mounted) return;
                     } else {
                       final newRoute = RouteModel(
                         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -214,7 +217,9 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                         updatedAt: null,
                       );
                       await firestoreService.createRoute(newRoute);
+                      if (!mounted) return;
                     }
+                    if (!mounted) return;
                     Navigator.of(context).pop();
                   },
                   child: Text(isEditing ? 'Save' : 'Create'),
@@ -246,7 +251,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
           IconButton(
             icon: const Icon(Icons.notifications),
             onPressed: () {
-              // TODO: Show notifications
+              // Notifications will be implemented in future updates
             },
           ),
           IconButton(
@@ -262,7 +267,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.onPrimary,
-          unselectedLabelColor: AppColors.onPrimary.withOpacity(0.7),
+          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
           indicatorColor: AppColors.onPrimary,
           tabs: const [
             Tab(text: 'Driver Approvals', icon: Icon(Icons.approval)),
@@ -665,6 +670,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                                     if (confirmed == true) {
                                       final firestoreService = Provider.of<FirestoreService>(context, listen: false);
                                       await firestoreService.deleteRoute(route.id);
+                                      if (!mounted) return;
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         const SnackBar(
                                           content: Text('Route deleted successfully'),

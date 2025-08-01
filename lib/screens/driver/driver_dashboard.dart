@@ -8,7 +8,6 @@ import 'package:collegebus/services/location_service.dart';
 import 'package:collegebus/models/bus_model.dart';
 import 'package:collegebus/models/route_model.dart';
 import 'package:collegebus/widgets/custom_button.dart';
-import 'package:collegebus/widgets/custom_input_field.dart';
 import 'package:collegebus/utils/constants.dart';
 
 class DriverDashboard extends StatefulWidget {
@@ -21,7 +20,6 @@ class DriverDashboard extends StatefulWidget {
 class _DriverDashboardState extends State<DriverDashboard>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  GoogleMapController? _mapController;
   LatLng? _currentLocation;
   BusModel? _myBus;
   bool _isSharing = false;
@@ -30,7 +28,7 @@ class _DriverDashboardState extends State<DriverDashboard>
   final _busNumberController = TextEditingController();
   final _startPointController = TextEditingController();
   final _endPointController = TextEditingController();
-  List<TextEditingController> _stopControllers = [];
+  final Map<String, TextEditingController> _stopControllers = <String, TextEditingController>{};
 
   List<RouteModel> _routes = [];
   RouteModel? _selectedRoute;
@@ -51,7 +49,7 @@ class _DriverDashboardState extends State<DriverDashboard>
     _busNumberController.dispose();
     _startPointController.dispose();
     _endPointController.dispose();
-    for (var controller in _stopControllers) {
+    for (var controller in _stopControllers.values) {
       controller.dispose();
     }
     super.dispose();
@@ -59,18 +57,10 @@ class _DriverDashboardState extends State<DriverDashboard>
   
   void _addStopController() {
     setState(() {
-      _stopControllers.add(TextEditingController());
+      _stopControllers['stop${_stopControllers.length}'] = TextEditingController();
     });
   }
   
-  void _removeStopController(int index) {
-    if (_stopControllers.length > 1) {
-      setState(() {
-        _stopControllers[index].dispose();
-        _stopControllers.removeAt(index);
-      });
-    }
-  }
 
   Future<void> _getCurrentLocation() async {
     final locationService = Provider.of<LocationService>(context, listen: false);
@@ -128,14 +118,14 @@ class _DriverDashboardState extends State<DriverDashboard>
           _startPointController.text = route?.startPoint ?? '';
           _endPointController.text = route?.endPoint ?? '';
           // Clear existing controllers
-          for (var controller in _stopControllers) {
+          for (var controller in _stopControllers.values) {
             controller.dispose();
           }
           _stopControllers.clear();
           // Add controllers for existing stops
           if (route != null) {
             for (int i = 0; i < route.stopPoints.length; i++) {
-              _stopControllers.add(TextEditingController(text: route.stopPoints[i]));
+              _stopControllers['stop$i'] = TextEditingController(text: route.stopPoints[i]);
             }
           }
           // Ensure at least one stop controller
@@ -144,54 +134,6 @@ class _DriverDashboardState extends State<DriverDashboard>
           }
         });
       }
-    }
-  }
-
-  Future<void> _saveBusInfo() async {
-    if (_busNumberController.text.isEmpty || _selectedRoute == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter bus number and select a route'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      return;
-    }
-
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
-    
-    final currentUser = authService.currentUserModel;
-    if (currentUser != null) {
-
-      if (_myBus == null) {
-        // Create new bus
-        final newBus = BusModel(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          busNumber: _busNumberController.text.trim(),
-          driverId: currentUser.id,
-          routeId: _selectedRoute!.id,
-          collegeId: currentUser.collegeId,
-          createdAt: DateTime.now(),
-        );
-
-        await firestoreService.createBus(newBus);
-        setState(() => _myBus = newBus);
-      } else {
-        // Update existing bus
-        await firestoreService.updateBus(_myBus!.id, {
-          'busNumber': _busNumberController.text.trim(),
-          'routeId': _selectedRoute!.id,
-          'updatedAt': DateTime.now().toIso8601String(),
-        });
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Bus information saved successfully'),
-          backgroundColor: AppColors.success,
-        ),
-      );
     }
   }
 
@@ -224,6 +166,13 @@ class _DriverDashboardState extends State<DriverDashboard>
           );
           
           await firestoreService.updateBusLocation(_myBus!.id, busLocation);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location shared successfully!'),
+              backgroundColor: AppColors.success,
+            ),
+          );
         },
       );
       setState(() => _isSharing = true);
@@ -245,7 +194,7 @@ class _DriverDashboardState extends State<DriverDashboard>
           IconButton(
             icon: const Icon(Icons.notifications),
             onPressed: () {
-              // TODO: Show notifications
+              // Notifications will be implemented in future updates
             },
           ),
           IconButton(
@@ -261,7 +210,7 @@ class _DriverDashboardState extends State<DriverDashboard>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.onPrimary,
-          unselectedLabelColor: AppColors.onPrimary.withOpacity(0.7),
+          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
           indicatorColor: AppColors.onPrimary,
           tabs: const [
             Tab(text: 'Bus Setup', icon: Icon(Icons.settings)),
@@ -363,7 +312,7 @@ class _DriverDashboardState extends State<DriverDashboard>
                 child: _currentLocation != null
                     ? GoogleMap(
                         onMapCreated: (GoogleMapController controller) {
-                          _mapController = controller;
+                          // _mapController = controller; // This line was removed
                         },
                         initialCameraPosition: CameraPosition(
                           target: _currentLocation!,
@@ -444,7 +393,7 @@ class _DriverDashboardState extends State<DriverDashboard>
                       Container(
                         padding: const EdgeInsets.all(AppSizes.paddingMedium),
                         decoration: BoxDecoration(
-                          color: AppColors.success.withOpacity(0.1),
+                          color: AppColors.success.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
                         ),
                         child: const Row(

@@ -406,6 +406,7 @@ class _StudentDashboardState extends State<StudentDashboard>
       
       await firestoreService.sendNotification(notification);
       
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Wait notification sent to driver!'),
@@ -430,7 +431,7 @@ class _StudentDashboardState extends State<StudentDashboard>
           IconButton(
             icon: const Icon(Icons.notifications),
             onPressed: () {
-              // TODO: Show notifications
+              // Notifications will be implemented in future updates
             },
           ),
           IconButton(
@@ -446,7 +447,7 @@ class _StudentDashboardState extends State<StudentDashboard>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.onPrimary,
-          unselectedLabelColor: AppColors.onPrimary.withOpacity(0.7),
+          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
           indicatorColor: AppColors.onPrimary,
           tabs: const [
             Tab(text: 'Track Buses', icon: Icon(Icons.map)),
@@ -520,7 +521,7 @@ class _StudentDashboardState extends State<StudentDashboard>
                           Chip(
                             label: Text(_selectedStop ?? _selectedBusNumber ?? ''),
                             onDeleted: _clearFilters,
-                            backgroundColor: AppColors.primary.withOpacity(0.1),
+                            backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                           ),
                           const SizedBox(width: AppSizes.paddingSmall),
                           Text(
@@ -675,7 +676,7 @@ class _StudentDashboardState extends State<StudentDashboard>
                     
                     return Card(
                       margin: const EdgeInsets.only(bottom: AppSizes.paddingMedium),
-                      color: isSelected ? AppColors.primary.withOpacity(0.1) : null,
+                      color: isSelected ? AppColors.primary.withValues(alpha: 0.1) : null,
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundColor: isSelected ? AppColors.primary : AppColors.success,

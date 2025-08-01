@@ -78,8 +78,10 @@ class _LoginScreenState extends State<LoginScreen> {
             route = '/login';
             break;
         }
+        if (!mounted) return;
         context.go(route);
       } else {
+        if (!mounted) return;
         _showErrorSnackBar(result['message']);
         if (result['needsEmailVerification'] == true) {
           _showEmailVerificationDialog();
@@ -91,6 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } catch (e) {
+      if (!mounted) return;
       _showErrorSnackBar('An error occurred. Please try again.');
     } finally {
       setState(() => _isLoading = false);
@@ -123,7 +126,9 @@ class _LoginScreenState extends State<LoginScreen> {
             onPressed: () async {
               final authService = Provider.of<AuthService>(context, listen: false);
               await authService.resendEmailVerification();
+              if (!mounted) return;
               Navigator.of(context).pop();
+              if (!mounted) return;
               _showErrorSnackBar('Verification email sent!');
             },
             child: const Text('Resend'),
@@ -133,62 +138,8 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _showDummyCredentials() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Test Credentials'),
-        content: const SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Use these credentials to test the app:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 16),
-              _CredentialItem(
-                role: 'Student',
-                email: 'student@test.com',
-                password: '123456',
-              ),
-              _CredentialItem(
-                role: 'Teacher',
-                email: 'teacher@test.com',
-                password: '123456',
-              ),
-              _CredentialItem(
-                role: 'Driver',
-                email: 'driver@test.com',
-                password: '123456',
-              ),
-              _CredentialItem(
-                role: 'Bus Coordinator',
-                email: 'coordinator@test.com',
-                password: '123456',
-              ),
-              _CredentialItem(
-                role: 'Admin',
-                email: 'admin@test.com',
-                password: '123456',
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final authService = Provider.of<AuthService>(context, listen: false);
     
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -372,7 +323,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () {
-                      // TODO: Implement forgot password
+                      // Forgot password will be implemented in future updates
                     },
                     child: const Text(
                       AppStrings.forgotPassword,
@@ -414,7 +365,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   margin: const EdgeInsets.only(bottom: 16),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.warning.withOpacity(0.15),
+                    color: AppColors.warning.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AppColors.warning),
                   ),
@@ -450,45 +401,5 @@ class _LoginScreenState extends State<LoginScreen> {
       ), // <-- This closes the SingleChildScrollView
     ), // <-- This closes the SafeArea
   ); // <-- This closes the Scaffold
-  }
-}
-
-class _CredentialItem extends StatelessWidget {
-  final String role;
-  final String email;
-  final String password;
-
-  const _CredentialItem({
-    required this.role,
-    required this.email,
-    required this.password,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
-        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            role,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: AppColors.primary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text('Email: $email'),
-          Text('Password: $password'),
-        ],
-      ),
-    );
   }
 }

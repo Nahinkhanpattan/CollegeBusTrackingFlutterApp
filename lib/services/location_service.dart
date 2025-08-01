@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -29,7 +28,9 @@ class LocationService {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
 
       return LatLng(position.latitude, position.longitude);
@@ -62,6 +63,7 @@ class LocationService {
         onLocationUpdate(latLng);
       });
     } catch (e) {
+      // Location tracking failed, but app can continue
     }
   }
 

@@ -32,7 +32,7 @@ class AppSizes {
 }
 
 class AppStrings {
-  static const String appName = 'College Bus Tracker';
+  static const String appName = 'Upasthit';
   static const String loginTitle = 'Welcome Back';
   static const String registerTitle = 'Create Account';
   static const String emailHint = 'Enter your college email';

@@ -77,7 +77,7 @@ class _AdminDashboardState extends State<AdminDashboard>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.onPrimary,
-          unselectedLabelColor: AppColors.onPrimary.withOpacity(0.7),
+          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
           indicatorColor: AppColors.onPrimary,
           tabs: const [
             Tab(text: 'Overview', icon: Icon(Icons.dashboard)),
@@ -213,7 +213,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                             ? IconButton(
                                 icon: const Icon(Icons.check, color: AppColors.success),
                                 onPressed: () {
-                                  // TODO: Verify college
+                                  // College verification will be implemented in future updates
                                 },
                               )
                             : null,

@@ -89,7 +89,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               phoneNumber: phoneNumber,
               onVerified: (user) async {
                 // Create driver user in Firestore after phone verification
-                final firestoreService = Provider.of<FirestoreService>(context, listen: false);
                 final currentUser = user;
                 final driverUser = {
                   'id': currentUser.uid,
@@ -117,6 +116,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
         return;
       } else {
+        if (!mounted) return;
         email = _emailController.text.trim();
         collegeName = _selectedCollege?.name ?? '';
         // Validate domain for teacher/student
@@ -142,14 +142,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (result['success']) {
         if (result['needsEmailVerification']) {
+          if (!mounted) return;
           context.go('/email-verification/${_emailController.text.trim()}');
         } else {
           _showSuccessDialog(result['message']);
         }
       } else {
+        if (!mounted) return;
         _showErrorSnackBar(result['message']);
       }
     } catch (e) {
+      if (!mounted) return;
       _showErrorSnackBar('An error occurred. Please try again.');
     } finally {
       setState(() => _isLoading = false);

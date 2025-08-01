@@ -287,6 +287,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
     if (currentUser != null) {
       await firestoreService.approveUser(student.id, currentUser.id);
       
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${student.fullName} has been approved'),
@@ -304,6 +305,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
     if (currentUser != null) {
       await firestoreService.rejectUser(student.id, currentUser.id);
       
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${student.fullName} has been rejected'),
@@ -328,7 +330,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
           IconButton(
             icon: const Icon(Icons.notifications),
             onPressed: () {
-              // TODO: Show notifications
+              // Notifications will be implemented in future updates
             },
           ),
           IconButton(
@@ -344,7 +346,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.onPrimary,
-          unselectedLabelColor: AppColors.onPrimary.withOpacity(0.7),
+          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
           indicatorColor: AppColors.onPrimary,
           tabs: const [
             Tab(text: 'Track Buses', icon: Icon(Icons.map)),
@@ -419,7 +421,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                           Chip(
                             label: Text(_selectedStop ?? _selectedBusNumber ?? ''),
                             onDeleted: _clearFilters,
-                            backgroundColor: AppColors.primary.withOpacity(0.1),
+                            backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                           ),
                           const SizedBox(width: AppSizes.paddingSmall),
                           Text(
@@ -535,7 +537,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                     
                     return Card(
                       margin: const EdgeInsets.only(bottom: AppSizes.paddingMedium),
-                      color: isSelected ? AppColors.primary.withOpacity(0.1) : null,
+                      color: isSelected ? AppColors.primary.withValues(alpha: 0.1) : null,
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundColor: isSelected ? AppColors.primary : AppColors.success,

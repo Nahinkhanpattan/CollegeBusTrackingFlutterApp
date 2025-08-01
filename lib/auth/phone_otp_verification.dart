@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/widgets/custom_button.dart';
 import 'package:collegebus/widgets/phone_input_field.dart';
 import 'package:collegebus/utils/constants.dart';
@@ -29,35 +27,11 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
   bool _isVerifying = false;
   String? _error;
   
-  // Test configuration for development
-  static const String _testPhoneNumber = "+16505554567";
-  static const String _testVerificationCode = "123456";
-
   @override
   void initState() {
     super.initState();
     if (widget.phoneNumber != null) {
       _phoneController.text = widget.phoneNumber!;
-    }
-    
-    // Configure Firebase Auth settings for testing
-    _configureFirebaseAuthForTesting();
-  }
-
-  void _configureFirebaseAuthForTesting() {
-    try {
-      // Disable app verification for testing (only in debug mode)
-      if (const bool.fromEnvironment('dart.vm.product') == false) {
-        debugPrint('Configuring Firebase Auth for testing...');
-        FirebaseAuth.instance.setSettings(
-          appVerificationDisabledForTesting: true,
-          phoneNumber: _testPhoneNumber,
-          smsCode: _testVerificationCode,
-        );
-        debugPrint('Firebase Auth test configuration applied successfully');
-      }
-    } catch (e) {
-      debugPrint('Error configuring Firebase Auth for testing: $e');
     }
   }
 
@@ -87,19 +61,10 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: fullPhoneNumber,
         timeout: const Duration(seconds: 60),
-        verificationCompleted: (PhoneAuthCredential credential) async {
-          // Auto-retrieval or instant verification
-          debugPrint('Phone verification completed automatically');
-          try {
-            final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-            if (widget.onVerified != null) widget.onVerified!(userCredential.user!);
-            _showSuccessMessage('Phone verification successful!');
-          } catch (e) {
-            setState(() => _error = 'Verification failed: $e');
-          }
+        verificationCompleted: (PhoneAuthCredential credential) {
+          _verifyOtp(credential.smsCode ?? '');
         },
         verificationFailed: (FirebaseAuthException e) {
-          debugPrint('Phone verification failed: ${e.message}');
           String errorMessage = 'Verification failed';
           
           switch (e.code) {
@@ -112,14 +77,26 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
             case 'quota-exceeded':
               errorMessage = 'SMS quota exceeded. Please try again later.';
               break;
+            case 'app-not-authorized':
+              errorMessage = 'App not authorized. Please check Firebase configuration.';
+              break;
+            case 'missing-app-token':
+              errorMessage = 'Missing app token. Please check Firebase configuration.';
+              break;
+            case 'invalid-app-credential':
+              errorMessage = 'Invalid app credential. Please check SHA-1 fingerprint in Firebase Console.';
+              break;
             default:
-              errorMessage = e.message ?? 'Verification failed';
+              if (e.message?.contains('app identifier') == true) {
+                errorMessage = 'Firebase configuration issue. Please add SHA-1 fingerprint to Firebase Console.';
+              } else {
+                errorMessage = e.message ?? 'Verification failed';
+              }
           }
           
           setState(() => _error = errorMessage);
         },
         codeSent: (String verificationId, int? resendToken) {
-          debugPrint('SMS code sent to ${_phoneController.text}');
           setState(() {
             _verificationId = verificationId;
             _error = null;
@@ -127,19 +104,16 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
           _showSuccessMessage('OTP sent successfully!');
         },
         codeAutoRetrievalTimeout: (String verificationId) {
-          debugPrint('SMS code auto-retrieval timeout');
-          setState(() => _verificationId = verificationId);
         },
       );
     } catch (e) {
-      debugPrint('Error sending OTP: $e');
-      setState(() => _error = 'Failed to send OTP: $e');
+      setState(() => _error = 'Failed to send OTP. Please try again.');
     } finally {
       setState(() => _isSending = false);
     }
   }
 
-  Future<void> _verifyOtp() async {
+  Future<void> _verifyOtp(String smsCode) async {
     if (_verificationId == null) {
       setState(() => _error = 'Please send OTP first');
       return;
@@ -153,7 +127,7 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
     try {
       final credential = PhoneAuthProvider.credential(
         verificationId: _verificationId!,
-        smsCode: _otpController.text.trim(),
+        smsCode: smsCode,
       );
       
       final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
@@ -166,7 +140,6 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
       _navigateToDashboard(userCredential.user!);
       
     } catch (e) {
-      debugPrint('Error verifying OTP: $e');
       setState(() => _error = 'Invalid OTP. Please try again.');
     } finally {
       setState(() => _isVerifying = false);
@@ -266,7 +239,7 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
                     Expanded(
                       child: CustomButton(
                         text: 'Verify OTP',
-                        onPressed: _isVerifying ? null : _verifyOtp,
+                        onPressed: _isVerifying ? null : () => _verifyOtp(_otpController.text.trim()),
                         isLoading: _isVerifying,
                       ),
                     ),
