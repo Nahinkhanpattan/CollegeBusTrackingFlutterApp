@@ -4,6 +4,7 @@ import 'package:collegebus/models/bus_model.dart';
 import 'package:collegebus/models/route_model.dart';
 import 'package:collegebus/models/college_model.dart';
 import 'package:collegebus/models/notification_model.dart';
+import 'package:collegebus/models/schedule_model.dart';
 import 'package:collegebus/utils/constants.dart';
 
 class FirestoreService {
@@ -213,6 +214,54 @@ class FirestoreService {
     }
   }
 
+  // Schedule operations
+  Future<void> createSchedule(ScheduleModel schedule) async {
+    try {
+      await _firestore
+          .collection(FirebaseCollections.schedules)
+          .doc(schedule.id)
+          .set(schedule.toMap());
+    } catch (e) {
+      throw Exception('Error creating schedule: $e');
+    }
+  }
+
+  Future<void> updateSchedule(String scheduleId, Map<String, dynamic> data) async {
+    try {
+      await _firestore
+          .collection(FirebaseCollections.schedules)
+          .doc(scheduleId)
+          .update(data);
+    } catch (e) {
+      throw Exception('Error updating schedule: $e');
+    }
+  }
+
+  Stream<List<ScheduleModel>> getSchedulesByCollege(String collegeId) {
+    try {
+      return _firestore
+          .collection(FirebaseCollections.schedules)
+          .where('collegeId', isEqualTo: collegeId)
+          .where('isActive', isEqualTo: true)
+          .snapshots()
+          .map((snapshot) => snapshot.docs
+              .map((doc) => ScheduleModel.fromMap(doc.data(), doc.id))
+              .toList());
+    } catch (e) {
+      throw Exception('Error fetching schedules by college: $e');
+    }
+  }
+
+  Future<void> deleteSchedule(String scheduleId) async {
+    try {
+      await _firestore
+          .collection(FirebaseCollections.schedules)
+          .doc(scheduleId)
+          .update({'isActive': false});
+    } catch (e) {
+      throw Exception('Error deleting schedule: $e');
+    }
+  }
   // Bus location operations
   Future<void> updateBusLocation(String busId, BusLocationModel location) async {
     try {

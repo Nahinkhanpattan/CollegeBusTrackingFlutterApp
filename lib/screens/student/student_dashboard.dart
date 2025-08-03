@@ -9,6 +9,7 @@ import 'package:collegebus/models/bus_model.dart';
 import 'package:collegebus/models/route_model.dart';
 import 'package:collegebus/models/notification_model.dart';
 import 'package:collegebus/widgets/custom_button.dart';
+import 'package:collegebus/widgets/bus_card.dart';
 import 'package:collegebus/utils/constants.dart';
 
 class StudentDashboard extends StatefulWidget {
@@ -433,6 +434,10 @@ class _StudentDashboardState extends State<StudentDashboard>
             onPressed: () {
               // Notifications will be implemented in future updates
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.schedule),
+            onPressed: () => context.go('/student/schedule'),
           ),
           IconButton(
             icon: const Icon(Icons.logout),

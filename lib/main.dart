@@ -5,6 +5,7 @@ import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/services/firestore_service.dart';
 import 'package:collegebus/services/location_service.dart';
 import 'package:collegebus/services/notification_service.dart';
+import 'package:collegebus/services/otp_service.dart';
 import 'package:collegebus/utils/constants.dart';
 import 'package:collegebus/utils/router.dart';
 import 'package:collegebus/screens/splash_screen.dart';
@@ -69,6 +70,7 @@ class MyApp extends StatelessWidget {
         Provider(create: (_) => FirestoreService()),
         Provider(create: (_) => LocationService()),
         Provider(create: (_) => NotificationService()),
+        Provider(create: (_) => OtpService()),
       ],
       child: MaterialApp.router(
         title: 'Upasthit',

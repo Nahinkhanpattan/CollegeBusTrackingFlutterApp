@@ -65,6 +65,9 @@ dependencies:
   
   # OTP input
   pinput: ^3.0.1
+  
+  # Shared preferences for persistence
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:

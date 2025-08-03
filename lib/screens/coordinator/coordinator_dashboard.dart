@@ -255,6 +255,10 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
             },
           ),
           IconButton(
+            icon: const Icon(Icons.schedule),
+            onPressed: () => context.go('/coordinator/schedule'),
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await authService.signOut();
@@ -272,7 +276,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
           tabs: const [
             Tab(text: 'Driver Approvals', icon: Icon(Icons.approval)),
             Tab(text: 'Bus Management', icon: Icon(Icons.directions_bus)),
-            Tab(text: 'College Info', icon: Icon(Icons.school)),
+            Tab(text: 'Route Management', icon: Icon(Icons.route)),
           ],
         ),
       ),

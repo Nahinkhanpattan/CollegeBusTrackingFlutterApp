@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:collegebus/services/otp_service.dart';
 import 'package:collegebus/widgets/custom_button.dart';
 import 'package:collegebus/widgets/phone_input_field.dart';
 import 'package:collegebus/utils/constants.dart';
+import 'dart:async';
 
 class PhoneOtpVerificationScreen extends StatefulWidget {
   final String? phoneNumber;
-  final void Function(User user)? onVerified;
+  final void Function(dynamic user)? onVerified;
 
   const PhoneOtpVerificationScreen({
     super.key,
@@ -26,6 +28,9 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
   bool _isSending = false;
   bool _isVerifying = false;
   String? _error;
+  int _cooldownSeconds = 0;
+  Timer? _cooldownTimer;
+  int _remainingRequests = 3;
   
   @override
   void initState() {
@@ -33,8 +38,42 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
     if (widget.phoneNumber != null) {
       _phoneController.text = widget.phoneNumber!;
     }
+    _loadRemainingRequests();
   }
 
+  @override
+  void dispose() {
+    _cooldownTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadRemainingRequests() async {
+    final otpService = Provider.of<OtpService>(context, listen: false);
+    final remaining = await otpService.getRemainingOtpRequests(_phoneController.text.trim());
+    final cooldown = await otpService.getCooldownTimeRemaining(_phoneController.text.trim());
+    
+    setState(() {
+      _remainingRequests = remaining;
+      _cooldownSeconds = cooldown * 60; // Convert minutes to seconds
+    });
+    
+    if (_cooldownSeconds > 0) {
+      _startCooldownTimer();
+    }
+  }
+
+  void _startCooldownTimer() {
+    _cooldownTimer?.cancel();
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _cooldownSeconds--;
+      });
+      
+      if (_cooldownSeconds <= 0) {
+        timer.cancel();
+      }
+    });
+  }
   Future<void> _sendOtp() async {
     setState(() {
       _isSending = true;
@@ -55,57 +94,28 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
         return;
       }
       
-      // Automatically prepend +91 country code
-      final fullPhoneNumber = '+91$phoneNumber';
+      final otpService = Provider.of<OtpService>(context, listen: false);
+      final result = await otpService.sendOtp(phoneNumber);
       
-      await FirebaseAuth.instance.verifyPhoneNumber(
-        phoneNumber: fullPhoneNumber,
-        timeout: const Duration(seconds: 60),
-        verificationCompleted: (PhoneAuthCredential credential) {
-          _verifyOtp(credential.smsCode ?? '');
-        },
-        verificationFailed: (FirebaseAuthException e) {
-          String errorMessage = 'Verification failed';
-          
-          switch (e.code) {
-            case 'invalid-phone-number':
-              errorMessage = 'Invalid phone number format';
-              break;
-            case 'too-many-requests':
-              errorMessage = 'Too many attempts. Please try again later.';
-              break;
-            case 'quota-exceeded':
-              errorMessage = 'SMS quota exceeded. Please try again later.';
-              break;
-            case 'app-not-authorized':
-              errorMessage = 'App not authorized. Please check Firebase configuration.';
-              break;
-            case 'missing-app-token':
-              errorMessage = 'Missing app token. Please check Firebase configuration.';
-              break;
-            case 'invalid-app-credential':
-              errorMessage = 'Invalid app credential. Please check SHA-1 fingerprint in Firebase Console.';
-              break;
-            default:
-              if (e.message?.contains('app identifier') == true) {
-                errorMessage = 'Firebase configuration issue. Please add SHA-1 fingerprint to Firebase Console.';
-              } else {
-                errorMessage = e.message ?? 'Verification failed';
-              }
-          }
-          
-          setState(() => _error = errorMessage);
-        },
-        codeSent: (String verificationId, int? resendToken) {
+      if (result['success']) {
+        if (result['autoVerified'] == true) {
+          // Auto-verification completed
+          final user = result['credential'];
+          if (widget.onVerified != null) widget.onVerified!(user);
+          _showSuccessMessage('Phone verification successful!');
+          _navigateToDashboard();
+        } else {
+          // OTP sent successfully
           setState(() {
-            _verificationId = verificationId;
+            _verificationId = result['verificationId'];
             _error = null;
           });
-          _showSuccessMessage('OTP sent successfully!');
-        },
-        codeAutoRetrievalTimeout: (String verificationId) {
-        },
-      );
+          _showSuccessMessage(result['message']);
+          await _loadRemainingRequests();
+        }
+      } else {
+        setState(() => _error = result['message']);
+      }
     } catch (e) {
       setState(() => _error = 'Failed to send OTP. Please try again.');
     } finally {
@@ -125,19 +135,16 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
     });
     
     try {
-      final credential = PhoneAuthProvider.credential(
-        verificationId: _verificationId!,
-        smsCode: smsCode,
-      );
+      final otpService = Provider.of<OtpService>(context, listen: false);
+      final result = await otpService.verifyOtp(_verificationId!, smsCode);
       
-      final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-      
-      if (widget.onVerified != null) widget.onVerified!(userCredential.user!);
-      
-      _showSuccessMessage('Phone verification successful!');
-      
-      // Navigate to appropriate dashboard based on user role
-      _navigateToDashboard(userCredential.user!);
+      if (result['success']) {
+        if (widget.onVerified != null) widget.onVerified!(result['user']);
+        _showSuccessMessage(result['message']);
+        _navigateToDashboard();
+      } else {
+        setState(() => _error = result['message']);
+      }
       
     } catch (e) {
       setState(() => _error = 'Invalid OTP. Please try again.');
@@ -156,7 +163,7 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
     );
   }
 
-  void _navigateToDashboard(User user) {
+  void _navigateToDashboard() {
     // You can implement role-based navigation here
     // For now, navigate to driver dashboard
     context.go('/driver');
@@ -193,6 +200,34 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
               const SizedBox(height: AppSizes.paddingLarge),
               const Text('Phone Verification', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
               const SizedBox(height: AppSizes.paddingMedium),
+              
+              // OTP limits info
+              Container(
+                padding: const EdgeInsets.all(AppSizes.paddingMedium),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: AppColors.primary),
+                    const SizedBox(width: AppSizes.paddingSmall),
+                    Expanded(
+                      child: Text(
+                        'Remaining OTP requests today: $_remainingRequests/3',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: AppSizes.paddingMedium),
+              
               // Phone number input with country code
               PhoneInputField(
                 controller: _phoneController,
@@ -209,8 +244,14 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
               const SizedBox(height: AppSizes.paddingMedium),
               if (_verificationId == null)
                 CustomButton(
-                  text: 'Send OTP',
-                  onPressed: _isSending ? null : _sendOtp,
+                  text: _cooldownSeconds > 0 
+                      ? 'Wait ${_cooldownSeconds}s' 
+                      : _remainingRequests <= 0 
+                          ? 'Daily limit reached' 
+                          : 'Send OTP',
+                  onPressed: _isSending || _cooldownSeconds > 0 || _remainingRequests <= 0 
+                      ? null 
+                      : _sendOtp,
                   isLoading: _isSending,
                 ),
               if (_verificationId != null) ...[
@@ -245,8 +286,14 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
                     ),
                     const SizedBox(width: AppSizes.paddingMedium),
                     TextButton(
-                      onPressed: _isSending ? null : _resendOtp,
-                      child: const Text('Resend'),
+                      onPressed: _isSending || _cooldownSeconds > 0 || _remainingRequests <= 0 
+                          ? null 
+                          : _resendOtp,
+                      child: Text(
+                        _cooldownSeconds > 0 
+                            ? 'Resend (${_cooldownSeconds}s)' 
+                            : 'Resend',
+                      ),
                     ),
                   ],
                 ),

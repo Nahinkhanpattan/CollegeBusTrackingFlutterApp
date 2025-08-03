@@ -323,7 +323,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () {
-                      // Forgot password will be implemented in future updates
+                      context.go('/forgot-password');
                     },
                     child: const Text(
                       AppStrings.forgotPassword,

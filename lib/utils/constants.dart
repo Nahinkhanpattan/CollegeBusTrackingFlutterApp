@@ -84,4 +84,5 @@ class FirebaseCollections {
   static const String routes = 'routes';
   static const String busLocations = 'bus_locations';
   static const String notifications = 'notifications';
+  static const String schedules = 'schedules';
 }

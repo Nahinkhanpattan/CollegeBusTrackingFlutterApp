@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:collegebus/models/user_model.dart';
 import 'package:collegebus/models/college_model.dart';
 import 'package:collegebus/utils/constants.dart';
@@ -18,21 +19,56 @@ class AuthService extends ChangeNotifier {
     try {
       // Check if Firebase is properly configured
       _auth.authStateChanges().listen(_onAuthStateChanged);
+      _initializePersistence();
     } catch (e) {
       // Firebase Auth not available, but app can continue
     }
   }
 
+  Future<void> _initializePersistence() async {
+    try {
+      await _auth.setPersistence(Persistence.LOCAL);
+    } catch (e) {
+      // Persistence setup failed, but app can continue
+    }
+  }
+
   Future<void> _onAuthStateChanged(User? user) async {
     try {
+    // Clear any previous user data when auth state changes
+    if (user == null) {
+      _currentUserModel = null;
+      await _clearUserSession();
+    } else {
     if (user != null) {
       await _loadUserModel(user.uid);
     } else {
       _currentUserModel = null;
     }
+    }
     notifyListeners();
     } catch (e) {
       // Error in auth state change, but app can continue
+    }
+  }
+
+  Future<void> _clearUserSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('last_logged_in_user');
+      await prefs.remove('user_role');
+    } catch (e) {
+      // Error clearing session, but app can continue
+    }
+  }
+
+  Future<void> _saveUserSession(String userId, UserRole role) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_logged_in_user', userId);
+      await prefs.setString('user_role', role.value);
+    } catch (e) {
+      // Error saving session, but app can continue
     }
   }
 
@@ -42,6 +78,7 @@ class AuthService extends ChangeNotifier {
       if (doc.exists) {
         final data = doc.data()!;
         _currentUserModel = UserModel.fromMap(data, uid);
+        await _saveUserSession(uid, _currentUserModel!.role);
       } else {
       }
       notifyListeners();
@@ -225,6 +262,28 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  Future<Map<String, dynamic>> resetPassword(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      return {
+        'success': true,
+        'message': 'Password reset email sent. Please check your inbox.',
+      };
+    } catch (e) {
+      String errorMessage = 'Failed to send reset email.';
+      
+      if (e.toString().contains('user-not-found')) {
+        errorMessage = 'No account found with this email address.';
+      } else if (e.toString().contains('invalid-email')) {
+        errorMessage = 'Please enter a valid email address.';
+      }
+      
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
+    }
+  }
   Future<bool> checkEmailVerification() async {
     try {
       await currentUser?.reload();
@@ -250,6 +309,7 @@ class AuthService extends ChangeNotifier {
 
   Future<void> signOut() async {
     try {
+    await _clearUserSession();
     await _auth.signOut();
     } catch (e) {
       // Error signing out, but app can continue
@@ -258,7 +318,4 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> resetPassword(String email) async {
-    await _auth.sendPasswordResetEmail(email: email);
-  }
 }
