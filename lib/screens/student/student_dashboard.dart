@@ -9,7 +9,6 @@ import 'package:collegebus/models/bus_model.dart';
 import 'package:collegebus/models/route_model.dart';
 import 'package:collegebus/models/notification_model.dart';
 import 'package:collegebus/widgets/custom_button.dart';
-import 'package:collegebus/widgets/bus_card.dart';
 import 'package:collegebus/utils/constants.dart';
 
 class StudentDashboard extends StatefulWidget {
@@ -452,7 +451,7 @@ class _StudentDashboardState extends State<StudentDashboard>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.onPrimary,
-          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
+          unselectedLabelColor: AppColors.onPrimary.withOpacity(0.7),
           indicatorColor: AppColors.onPrimary,
           tabs: const [
             Tab(text: 'Track Buses', icon: Icon(Icons.map)),
@@ -526,7 +525,7 @@ class _StudentDashboardState extends State<StudentDashboard>
                           Chip(
                             label: Text(_selectedStop ?? _selectedBusNumber ?? ''),
                             onDeleted: _clearFilters,
-                            backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                            backgroundColor: AppColors.primary.withOpacity(0.1),
                           ),
                           const SizedBox(width: AppSizes.paddingSmall),
                           Text(

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/services/firestore_service.dart';
 import 'package:collegebus/services/location_service.dart';
@@ -211,7 +210,7 @@ class _DriverDashboardState extends State<DriverDashboard>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.onPrimary,
-          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
+                          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
           indicatorColor: AppColors.onPrimary,
           tabs: const [
             Tab(text: 'Bus Setup', icon: Icon(Icons.settings)),

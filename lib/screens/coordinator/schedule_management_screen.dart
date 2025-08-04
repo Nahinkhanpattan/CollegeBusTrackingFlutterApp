@@ -6,7 +6,6 @@ import 'package:collegebus/models/schedule_model.dart';
 import 'package:collegebus/models/route_model.dart';
 import 'package:collegebus/models/bus_model.dart';
 import 'package:collegebus/utils/constants.dart';
-import 'package:collegebus/widgets/custom_button.dart';
 
 class ScheduleManagementScreen extends StatefulWidget {
   const ScheduleManagementScreen({super.key});
@@ -252,7 +251,7 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.onPrimary,
-          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
+                          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
           indicatorColor: AppColors.onPrimary,
           tabs: const [
             Tab(text: '1st Shift', icon: Icon(Icons.wb_sunny)),

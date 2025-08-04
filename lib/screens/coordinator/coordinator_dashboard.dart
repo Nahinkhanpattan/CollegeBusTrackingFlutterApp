@@ -271,7 +271,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.onPrimary,
-          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
+                          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
           indicatorColor: AppColors.onPrimary,
           tabs: const [
             Tab(text: 'Driver Approvals', icon: Icon(Icons.approval)),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,7 +7,6 @@ class OtpService {
   static const int _maxOtpRequestsPerDay = 3;
   static const int _cooldownMinutes = 1;
   
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Future<Map<String, dynamic>> canRequestOtp(String phoneNumber) async {

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/auth/login_screen.dart';
 import 'package:collegebus/auth/register_screen.dart';
-import 'package:collegebus/auth/otp_verification.dart';
+import 'package:collegebus/auth/otp_verification.dart' show EmailVerificationScreen;
 import 'package:collegebus/auth/forgot_password_screen.dart';
 import 'package:collegebus/screens/student/student_dashboard.dart';
 import 'package:collegebus/screens/student/bus_schedule_screen.dart';

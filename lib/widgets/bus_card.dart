@@ -25,7 +25,7 @@ class BusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: AppSizes.paddingMedium),
-      color: isSelected ? AppColors.primary.withValues(alpha: 0.1) : null,
+              color: isSelected ? AppColors.primary.withValues(alpha: 0.1) : null,
       elevation: isSelected ? 4 : 1,
       child: InkWell(
         onTap: onTap,

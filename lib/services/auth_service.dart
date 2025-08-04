@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -35,18 +36,14 @@ class AuthService extends ChangeNotifier {
 
   Future<void> _onAuthStateChanged(User? user) async {
     try {
-    // Clear any previous user data when auth state changes
-    if (user == null) {
-      _currentUserModel = null;
-      await _clearUserSession();
-    } else {
-    if (user != null) {
-      await _loadUserModel(user.uid);
-    } else {
-      _currentUserModel = null;
-    }
-    }
-    notifyListeners();
+      // Clear any previous user data when auth state changes
+      if (user == null) {
+        _currentUserModel = null;
+        await _clearUserSession();
+      } else {
+        await _loadUserModel(user.uid);
+      }
+      notifyListeners();
     } catch (e) {
       // Error in auth state change, but app can continue
     }

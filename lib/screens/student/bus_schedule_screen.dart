@@ -164,7 +164,7 @@ class _BusScheduleScreenState extends State<BusScheduleScreen>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.onPrimary,
-          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
+                          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
           indicatorColor: AppColors.onPrimary,
           tabs: const [
             Tab(text: '1st Shift', icon: Icon(Icons.wb_sunny)),
