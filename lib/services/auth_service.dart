@@ -71,15 +71,20 @@ class AuthService extends ChangeNotifier {
 
   Future<void> _loadUserModel(String uid) async {
     try {
+      print('DEBUG: Loading user model for UID: $uid');
       final doc = await _firestore.collection(FirebaseCollections.users).doc(uid).get();
       if (doc.exists) {
         final data = doc.data()!;
+        print('DEBUG: User document found: $data');
         _currentUserModel = UserModel.fromMap(data, uid);
+        print('DEBUG: User model created: ${_currentUserModel!.fullName}');
         await _saveUserSession(uid, _currentUserModel!.role);
       } else {
+        print('DEBUG: User document does not exist for UID: $uid');
       }
       notifyListeners();
     } catch (e) {
+      print('DEBUG: Error loading user model: $e');
       // Error loading user model, but app can continue
     }
   }
@@ -190,21 +195,28 @@ class AuthService extends ChangeNotifier {
     required String password,
   }) async {
     try {
+      print('DEBUG: Attempting login for email: $email');
+      
       final userCredential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
 
       final user = userCredential.user!;
+      print('DEBUG: Firebase auth successful for user: ${user.uid}');
+      
       await _loadUserModel(user.uid);
 
       if (_currentUserModel == null) {
+        print('DEBUG: User profile not found in Firestore');
         return {
           'success': false,
           'message': 'User profile not found. Please register first.',
         };
       }
 
+      print('DEBUG: User model loaded: ${_currentUserModel!.fullName}, Role: ${_currentUserModel!.role}, Approved: ${_currentUserModel!.approved}, EmailVerified: ${_currentUserModel!.emailVerified}');
+      
       final role = _currentUserModel!.role;
       final approved = _currentUserModel!.approved;
       final emailVerified = _currentUserModel!.emailVerified || user.emailVerified;
@@ -212,11 +224,13 @@ class AuthService extends ChangeNotifier {
       // Admin: Only allow login if approved
       if (role == UserRole.admin) {
         if (!approved) {
+          print('DEBUG: Admin account not approved');
           return {
             'success': false,
             'message': 'Your account is pending approval.',
           };
         }
+        print('DEBUG: Admin login successful');
         return {
           'success': true,
           'message': 'Login successful.',
@@ -225,6 +239,7 @@ class AuthService extends ChangeNotifier {
 
       // For all other roles: require BOTH email verified AND approved
       if (!emailVerified) {
+        print('DEBUG: Email not verified');
         return {
           'success': false,
           'message': 'Please verify your email address first.',
@@ -232,16 +247,20 @@ class AuthService extends ChangeNotifier {
         };
       }
       if (!approved) {
+        print('DEBUG: Account not approved');
         return {
           'success': false,
           'message': 'Your account is pending approval.',
         };
       }
+      
+      print('DEBUG: Login successful for role: $role');
       return {
         'success': true,
         'message': 'Login successful.',
       };
     } catch (e) {
+      print('DEBUG: Login error: $e');
       String errorMessage = 'Login failed. Please check your credentials.';
       
       if (e.toString().contains('invalid-credentials')) {
@@ -315,4 +334,5 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Bus location operations
 }
