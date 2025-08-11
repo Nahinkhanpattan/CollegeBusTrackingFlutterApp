@@ -24,14 +24,10 @@ class _DriverDashboardState extends State<DriverDashboard>
   BusModel? _myBus;
   bool _isSharing = false;
 
-  // Bus setup form controllers
-  final _busNumberController = TextEditingController();
-  final _startPointController = TextEditingController();
-  final _endPointController = TextEditingController();
-  final Map<String, TextEditingController> _stopControllers = <String, TextEditingController>{};
-
   List<RouteModel> _routes = [];
   RouteModel? _selectedRoute;
+  List<String> _busNumbers = [];
+  String? _selectedBusNumber;
 
   @override
   void initState() {
@@ -39,28 +35,15 @@ class _DriverDashboardState extends State<DriverDashboard>
     _tabController = TabController(length: 2, vsync: this);
     _getCurrentLocation();
     _loadRoutes();
+    _loadBusNumbers();
     _loadMyBus();
-    _addStopController(); // Add initial stop controller
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _busNumberController.dispose();
-    _startPointController.dispose();
-    _endPointController.dispose();
-    for (var controller in _stopControllers.values) {
-      controller.dispose();
-    }
     super.dispose();
   }
-  
-  void _addStopController() {
-    setState(() {
-      _stopControllers['stop${_stopControllers.length}'] = TextEditingController();
-    });
-  }
-  
 
   Future<void> _getCurrentLocation() async {
     final locationService = Provider.of<LocationService>(context, listen: false);
@@ -68,6 +51,19 @@ class _DriverDashboardState extends State<DriverDashboard>
     if (location != null) {
       setState(() {
         _currentLocation = location;
+      });
+    }
+  }
+
+  Future<void> _loadBusNumbers() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+    final collegeId = authService.currentUserModel?.collegeId;
+    if (collegeId != null) {
+      firestoreService.getBusNumbers(collegeId).listen((busNumbers) {
+        setState(() {
+          _busNumbers = busNumbers;
+        });
       });
     }
   }
@@ -93,16 +89,17 @@ class _DriverDashboardState extends State<DriverDashboard>
     if (currentUser != null) {
       final bus = await firestoreService.getBusByDriver(currentUser.id);
       if (bus != null) {
-        RouteModel? route;
-        if (bus.routeId != null) {
-          route = _routes.firstWhere(
+        setState(() {
+          _myBus = bus;
+          _selectedBusNumber = bus.busNumber;
+          _selectedRoute = _routes.firstWhere(
             (r) => r.id == bus.routeId,
             orElse: () => RouteModel(
               id: '',
               routeName: 'N/A',
               routeType: '',
-              startPoint: '',
-              endPoint: '',
+              startPoint: 'N/A',
+              endPoint: 'N/A',
               stopPoints: [],
               collegeId: '',
               createdBy: '',
@@ -110,28 +107,6 @@ class _DriverDashboardState extends State<DriverDashboard>
               createdAt: DateTime.now(),
             ),
           );
-        }
-        setState(() {
-          _myBus = bus;
-          _busNumberController.text = bus.busNumber;
-          _selectedRoute = route;
-          _startPointController.text = route?.startPoint ?? '';
-          _endPointController.text = route?.endPoint ?? '';
-          // Clear existing controllers
-          for (var controller in _stopControllers.values) {
-            controller.dispose();
-          }
-          _stopControllers.clear();
-          // Add controllers for existing stops
-          if (route != null) {
-            for (int i = 0; i < route.stopPoints.length; i++) {
-              _stopControllers['stop$i'] = TextEditingController(text: route.stopPoints[i]);
-            }
-          }
-          // Ensure at least one stop controller
-          if (_stopControllers.isEmpty) {
-            _addStopController();
-          }
         });
       }
     }
@@ -222,86 +197,135 @@ class _DriverDashboardState extends State<DriverDashboard>
         controller: _tabController,
         children: [
           // Bus Setup Tab
-          Padding(
-            padding: const EdgeInsets.all(AppSizes.paddingMedium),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Bus & Route Selection',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+          Column(
+            children: [
+              // Location display
+              if (_currentLocation != null)
+                Container(
+                  padding: const EdgeInsets.all(AppSizes.paddingMedium),
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on, color: AppColors.primary),
+                      const SizedBox(width: AppSizes.paddingSmall),
+                      Expanded(
+                        child: Text(
+                          'Your Location: ${_currentLocation!.latitude.toStringAsFixed(4)}, ${_currentLocation!.longitude.toStringAsFixed(4)}',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: AppSizes.paddingLarge),
-                if (_myBus == null) ...[
-                  DropdownButtonFormField<RouteModel>(
-                    value: _selectedRoute,
-                    items: _routes.map((route) => DropdownMenuItem(
-                      value: route,
-                      child: Text(route.displayName),
-                    )).toList(),
-                    onChanged: (route) {
-                      setState(() {
-                        _selectedRoute = route;
-                      });
-                    },
-                    decoration: const InputDecoration(
-                      labelText: 'Select Route',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: AppSizes.paddingLarge),
-                  CustomButton(
-                    text: 'Assign Bus',
-                    onPressed: () async {
-                      if (_selectedRoute == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Please select a route'),
-                            backgroundColor: AppColors.error,
+              
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSizes.paddingMedium),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Bus & Route Selection',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: AppSizes.paddingLarge),
+                      if (_myBus == null) ...[
+                        DropdownButtonFormField<String>(
+                          value: _selectedBusNumber,
+                          items: _busNumbers.map((busNumber) => DropdownMenuItem(
+                            value: busNumber,
+                            child: Text(busNumber),
+                          )).toList(),
+                          onChanged: (busNumber) {
+                            setState(() {
+                              _selectedBusNumber = busNumber;
+                            });
+                          },
+                          decoration: const InputDecoration(
+                            labelText: 'Select Bus Number',
+                            border: OutlineInputBorder(),
                           ),
-                        );
-                        return;
-                      }
-                      final authService = Provider.of<AuthService>(context, listen: false);
-                      final firestoreService = Provider.of<FirestoreService>(context, listen: false);
-                      final currentUser = authService.currentUserModel;
-                      if (currentUser == null) return;
-                      final newBus = BusModel(
-                        id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        busNumber: 'Bus for ${currentUser.fullName}',
-                        driverId: currentUser.id,
-                        routeId: _selectedRoute!.id,
-                        collegeId: currentUser.collegeId,
-                        createdAt: DateTime.now(),
-                      );
-                      await firestoreService.createBus(newBus);
-                      setState(() => _myBus = newBus);
-                    },
-                    icon: const Icon(Icons.directions_bus),
+                        ),
+                        const SizedBox(height: AppSizes.paddingMedium),
+                        DropdownButtonFormField<RouteModel>(
+                          value: _selectedRoute,
+                          items: _routes.map((route) => DropdownMenuItem(
+                            value: route,
+                            child: Text('${route.routeName} (${route.routeType.toUpperCase()})'),
+                          )).toList(),
+                          onChanged: (route) {
+                            setState(() {
+                              _selectedRoute = route;
+                            });
+                          },
+                          decoration: const InputDecoration(
+                            labelText: 'Select Route',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: AppSizes.paddingLarge),
+                        CustomButton(
+                          text: 'Assign Bus',
+                          onPressed: () async {
+                            if (_selectedRoute == null || _selectedBusNumber == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please select both route and bus number'),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                              return;
+                            }
+                            final authService = Provider.of<AuthService>(context, listen: false);
+                            final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+                            final currentUser = authService.currentUserModel;
+                            if (currentUser == null) return;
+                            final newBus = BusModel(
+                              id: DateTime.now().millisecondsSinceEpoch.toString(),
+                              busNumber: _selectedBusNumber!,
+                              driverId: currentUser.id,
+                              routeId: _selectedRoute!.id,
+                              collegeId: currentUser.collegeId,
+                              createdAt: DateTime.now(),
+                            );
+                            await firestoreService.createBus(newBus);
+                            setState(() => _myBus = newBus);
+                          },
+                          icon: const Icon(Icons.directions_bus),
+                        ),
+                      ] else ...[
+                        Text(
+                          'Bus: ${_myBus!.busNumber}',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: AppSizes.paddingSmall),
+                        if (_selectedRoute != null) ...[
+                          Text(
+                            'Route: ${_selectedRoute!.routeName}',
+                            style: const TextStyle(fontSize: 16, color: AppColors.textSecondary),
+                          ),
+                          Text(
+                            'Type: ${_selectedRoute!.routeType.toUpperCase()}',
+                            style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                          ),
+                          Text(
+                            '${_selectedRoute!.startPoint} → ${_selectedRoute!.endPoint}',
+                            style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ],
+                    ],
                   ),
-                ] else ...[
-                  Text(
-                    'Bus: ${_myBus!.busNumber}',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: AppSizes.paddingSmall),
-                  if (_selectedRoute != null) ...[
-                    Text(
-                      'Route: ${_selectedRoute!.displayName}',
-                      style: const TextStyle(fontSize: 16, color: AppColors.textSecondary),
-                    ),
-                    Text(
-                      '${_selectedRoute!.startPoint} → ${_selectedRoute!.endPoint}',
-                      style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ],
-              ],
-            ),
+                ),
+              ),
+            ],
           ),
           
           // Live Tracking Tab
@@ -349,6 +373,32 @@ class _DriverDashboardState extends State<DriverDashboard>
                 ),
                 child: Column(
                   children: [
+                    // Location info
+                    if (_currentLocation != null)
+                      Container(
+                        padding: const EdgeInsets.all(AppSizes.paddingMedium),
+                        margin: const EdgeInsets.only(bottom: AppSizes.paddingMedium),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.location_on, color: AppColors.primary),
+                            const SizedBox(width: AppSizes.paddingSmall),
+                            Expanded(
+                              child: Text(
+                                'Your Location: ${_currentLocation!.latitude.toStringAsFixed(4)}, ${_currentLocation!.longitude.toStringAsFixed(4)}',
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    
                     if (_myBus != null) ...[
                       Text(
                         'Bus ${_myBus!.busNumber}',
@@ -361,14 +411,14 @@ class _DriverDashboardState extends State<DriverDashboard>
                       const SizedBox(height: AppSizes.paddingSmall),
                       if (_selectedRoute != null) ...[
                         Text(
-                          'Route: ${_selectedRoute!.displayName}',
+                          'Route: ${_selectedRoute!.routeName}',
                           style: const TextStyle(
                             fontSize: 16,
                             color: AppColors.textSecondary,
                           ),
                         ),
                         Text(
-                          '${_selectedRoute!.startPoint} → ${_selectedRoute!.endPoint}',
+                          'Type: ${_selectedRoute!.routeType.toUpperCase()} | ${_selectedRoute!.startPoint} → ${_selectedRoute!.endPoint}',
                           style: const TextStyle(
                             fontSize: 14,
                             color: AppColors.textSecondary,

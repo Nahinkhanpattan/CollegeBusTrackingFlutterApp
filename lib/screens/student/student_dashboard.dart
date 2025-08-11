@@ -465,6 +465,28 @@ class _StudentDashboardState extends State<StudentDashboard>
           // Map Tab
           Column(
             children: [
+              // Location display
+              if (_currentLocation != null)
+                Container(
+                  padding: const EdgeInsets.all(AppSizes.paddingMedium),
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on, color: AppColors.primary),
+                      const SizedBox(width: AppSizes.paddingSmall),
+                      Expanded(
+                        child: Text(
+                          'Your Location: ${_currentLocation!.latitude.toStringAsFixed(4)}, ${_currentLocation!.longitude.toStringAsFixed(4)}',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              
               // Filter Controls
               Container(
                 padding: const EdgeInsets.all(AppSizes.paddingMedium),

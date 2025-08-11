@@ -5,6 +5,7 @@ import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/services/firestore_service.dart';
 import 'package:collegebus/models/user_model.dart';
 import 'package:collegebus/models/bus_model.dart';
+import 'package:collegebus/models/college_model.dart';
 import 'package:collegebus/utils/constants.dart';
 import 'package:collegebus/models/route_model.dart';
 
@@ -21,14 +22,18 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
   List<UserModel> _pendingDrivers = [];
   List<BusModel> _buses = [];
   List<RouteModel> _routes = [];
+  CollegeModel? _college;
+  List<String> _busNumbers = [];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _loadPendingDrivers();
     _loadBuses();
     _loadRoutes();
+    _loadCollege();
+    _loadBusNumbers();
   }
 
   @override
@@ -78,6 +83,31 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
     }
   }
 
+  Future<void> _loadCollege() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+    final collegeId = authService.currentUserModel?.collegeId;
+    if (collegeId != null) {
+      final college = await firestoreService.getCollege(collegeId);
+      setState(() {
+        _college = college;
+      });
+    }
+  }
+
+  Future<void> _loadBusNumbers() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+    final collegeId = authService.currentUserModel?.collegeId;
+    if (collegeId != null) {
+      firestoreService.getBusNumbers(collegeId).listen((busNumbers) {
+        setState(() {
+          _busNumbers = busNumbers;
+        });
+      });
+    }
+  }
+
   Future<void> _approveDriver(UserModel driver) async {
     final authService = Provider.of<AuthService>(context, listen: false);
     final firestoreService = Provider.of<FirestoreService>(context, listen: false);
@@ -116,8 +146,10 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
 
   void _showCreateOrEditRouteDialog({RouteModel? route}) {
     final isEditing = route != null;
+    final TextEditingController nameController = TextEditingController(text: route?.routeName ?? '');
     final TextEditingController startController = TextEditingController(text: route?.startPoint ?? '');
     final TextEditingController endController = TextEditingController(text: route?.endPoint ?? '');
+    String selectedType = route?.routeType ?? 'pickup';
     List<TextEditingController> stopControllers =
         (route?.stopPoints ?? []).map((s) => TextEditingController(text: s)).toList();
     if (stopControllers.isEmpty) stopControllers.add(TextEditingController());
@@ -134,9 +166,28 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(labelText: 'Route Name'),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: selectedType,
+                      decoration: const InputDecoration(labelText: 'Route Type'),
+                      items: const [
+                        DropdownMenuItem(value: 'pickup', child: Text('Pickup')),
+                        DropdownMenuItem(value: 'drop', child: Text('Drop')),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          selectedType = value!;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
                       controller: startController,
                       decoration: const InputDecoration(labelText: 'Start Point'),
-                      enabled: !isEditing, // Fixed if editing
+                      enabled: !isEditing,
                     ),
                     const SizedBox(height: 8),
                     ...stopControllers.asMap().entries.map((entry) {
@@ -178,7 +229,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                     TextField(
                       controller: endController,
                       decoration: const InputDecoration(labelText: 'End Point'),
-                      enabled: !isEditing, // Fixed if editing
+                      enabled: !isEditing,
                     ),
                   ],
                 ),
@@ -198,6 +249,8 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                     if (startController.text.trim().isEmpty || endController.text.trim().isEmpty) return;
                     if (isEditing) {
                       await firestoreService.updateRoute(route.id, {
+                        'routeName': nameController.text.trim(),
+                        'routeType': selectedType,
                         'stopPoints': stops,
                         'updatedAt': DateTime.now().toIso8601String(),
                       });
@@ -205,8 +258,10 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                     } else {
                       final newRoute = RouteModel(
                         id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        routeName: '${startController.text.trim()} - ${endController.text.trim()}',
-                        routeType: 'pickup',
+                        routeName: nameController.text.trim().isNotEmpty 
+                            ? nameController.text.trim()
+                            : '${startController.text.trim()} - ${endController.text.trim()}',
+                        routeType: selectedType,
                         startPoint: startController.text.trim(),
                         endPoint: endController.text.trim(),
                         stopPoints: stops,
@@ -232,8 +287,53 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
     );
   }
 
-  void _showCreateRouteDialog() {
-    _showCreateOrEditRouteDialog();
+  void _showCreateBusNumberDialog() {
+    final TextEditingController busNumberController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add Bus Number'),
+          content: TextField(
+            controller: busNumberController,
+            decoration: const InputDecoration(
+              labelText: 'Bus Number',
+              hintText: 'e.g., KA-01-AB-1234',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final busNumber = busNumberController.text.trim();
+                if (busNumber.isEmpty) return;
+
+                final authService = Provider.of<AuthService>(context, listen: false);
+                final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+                final collegeId = authService.currentUserModel?.collegeId;
+                
+                if (collegeId != null) {
+                  await firestoreService.addBusNumber(collegeId, busNumber);
+                  if (!mounted) return;
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Bus number $busNumber added successfully'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -271,18 +371,87 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.onPrimary,
-                          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
+          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
           indicatorColor: AppColors.onPrimary,
+          isScrollable: true,
           tabs: const [
+            Tab(text: 'Overview', icon: Icon(Icons.dashboard)),
             Tab(text: 'Driver Approvals', icon: Icon(Icons.approval)),
-            Tab(text: 'Bus Management', icon: Icon(Icons.directions_bus)),
-            Tab(text: 'Route Management', icon: Icon(Icons.route)),
+            Tab(text: 'Routes', icon: Icon(Icons.route)),
+            Tab(text: 'Bus Numbers', icon: Icon(Icons.directions_bus)),
+            Tab(text: 'College Info', icon: Icon(Icons.school)),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
+          // Overview Tab
+          Padding(
+            padding: const EdgeInsets.all(AppSizes.paddingMedium),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'System Overview',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppSizes.paddingLarge),
+                
+                // Statistics Cards
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        'Total Routes',
+                        _routes.length.toString(),
+                        Icons.route,
+                        AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(width: AppSizes.paddingMedium),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Active Buses',
+                        _buses.where((b) => b.isActive).length.toString(),
+                        Icons.directions_bus,
+                        AppColors.success,
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: AppSizes.paddingMedium),
+                
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        'Pending Drivers',
+                        _pendingDrivers.length.toString(),
+                        Icons.pending,
+                        AppColors.warning,
+                      ),
+                    ),
+                    const SizedBox(width: AppSizes.paddingMedium),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Bus Numbers',
+                        _busNumbers.length.toString(),
+                        Icons.confirmation_number,
+                        AppColors.secondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          
           // Driver Approvals Tab
           _pendingDrivers.isEmpty
               ? const Center(
@@ -328,7 +497,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                             if (driver.phoneNumber != null && driver.phoneNumber!.isNotEmpty)
                               Text('Phone: ${driver.phoneNumber}'),
                             Text(
-                              'Applied:  ${driver.createdAt.toString().substring(0, 10)}',
+                              'Applied: ${driver.createdAt.toString().substring(0, 10)}',
                               style: const TextStyle(
                                 color: AppColors.textSecondary,
                                 fontSize: 12,
@@ -354,185 +523,8 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                     );
                   },
                 ),
-          // Bus Management Tab
-          _buses.isEmpty
-              ? const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.directions_bus_outlined,
-                        size: 64,
-                        color: AppColors.textSecondary,
-                      ),
-                      SizedBox(height: AppSizes.paddingMedium),
-                      Text(
-                        'No buses registered yet',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      SizedBox(height: AppSizes.paddingSmall),
-                      Text(
-                        'Buses will appear here once drivers set them up',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textSecondary,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(AppSizes.paddingMedium),
-                  itemCount: _buses.length,
-                  itemBuilder: (context, index) {
-                    final bus = _buses[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: AppSizes.paddingMedium),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: bus.isActive ? AppColors.success : AppColors.error,
-                          child: Icon(
-                            Icons.directions_bus,
-                            color: AppColors.onPrimary,
-                          ),
-                        ),
-                        title: Text(
-                          'Bus ${bus.busNumber}',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Builder(builder: (context) {
-                              final route = _routes.firstWhere(
-                                (r) => r.id == bus.routeId,
-                                orElse: () => RouteModel(
-                                  id: '',
-                                  routeName: 'N/A',
-                                  routeType: '',
-                                  startPoint: 'N/A',
-                                  endPoint: 'N/A',
-                                  stopPoints: [],
-                                  collegeId: '',
-                                  createdBy: '',
-                                  isActive: false,
-                                  createdAt: DateTime.now(),
-                                ),
-                              );
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Route: ${route.startPoint} → ${route.endPoint}'),
-                                  Text(
-                                    'Stops: ${route.stopPoints.isNotEmpty ? route.stopPoints.join(', ') : 'N/A'}',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ],
-                              );
-                            }),
-                            Text(
-                              'Status: ${bus.isActive ? 'Active' : 'Inactive'}',
-                              style: TextStyle(
-                                color: bus.isActive ? AppColors.success : AppColors.error,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                        trailing: IconButton(
-                          icon: Icon(
-                            bus.isActive ? Icons.pause : Icons.play_arrow,
-                            color: bus.isActive ? AppColors.error : AppColors.success,
-                          ),
-                          onPressed: () async {
-                            final firestoreService = Provider.of<FirestoreService>(context, listen: false);
-                            await firestoreService.updateBus(bus.id, {
-                              'isActive': !bus.isActive,
-                              'updatedAt': DateTime.now().toIso8601String(),
-                            });
-                          },
-                        ),
-                        isThreeLine: true,
-                      ),
-                    );
-                  },
-                ),
-          // College Info Tab
-          Padding(
-            padding: const EdgeInsets.all(AppSizes.paddingMedium),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'College Information',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: AppSizes.paddingLarge),
-                
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSizes.paddingMedium),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'College Details',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: AppSizes.paddingMedium),
-                        
-                        _buildInfoRow('College ID', user?.collegeId ?? 'N/A'),
-                        _buildInfoRow('Your Role', user?.role.displayName ?? 'N/A'),
-                        _buildInfoRow('Email', user?.email ?? 'N/A'),
-                        _buildInfoRow('Status', user?.approved == true ? 'Approved' : 'Pending'),
-                      ],
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(height: AppSizes.paddingMedium),
-                
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSizes.paddingMedium),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Statistics',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: AppSizes.paddingMedium),
-                        
-                        _buildInfoRow('Total Buses', _buses.length.toString()),
-                        _buildInfoRow('Active Buses', _buses.where((b) => b.isActive).length.toString()),
-                        _buildInfoRow('Pending Drivers', _pendingDrivers.length.toString()),
-                        _buildInfoRow('Total Routes', _routes.length.toString()),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // Route Management Tab
+
+          // Routes Tab
           Column(
             children: [
               Container(
@@ -548,7 +540,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                       ),
                     ),
                     ElevatedButton.icon(
-                      onPressed: _showCreateRouteDialog,
+                      onPressed: () => _showCreateOrEditRouteDialog(),
                       icon: const Icon(Icons.add),
                       label: const Text('Create Route'),
                       style: ElevatedButton.styleFrom(
@@ -610,12 +602,13 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
                                 ),
                               ),
                               title: Text(
-                                route.displayName,
+                                route.routeName,
                                 style: const TextStyle(fontWeight: FontWeight.w600),
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  Text('Type: ${route.routeType.toUpperCase()}'),
                                   Text('${route.startPoint} → ${route.endPoint}'),
                                   if (route.stopPoints.isNotEmpty)
                                     Text(
@@ -693,7 +686,265 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
               ),
             ],
           ),
+
+          // Bus Numbers Tab
+          Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppSizes.paddingMedium),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Bus Numbers',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: _showCreateBusNumberDialog,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Bus Number'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.onPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: _busNumbers.isEmpty
+                    ? const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.directions_bus_outlined,
+                              size: 64,
+                              color: AppColors.textSecondary,
+                            ),
+                            SizedBox(height: AppSizes.paddingMedium),
+                            Text(
+                              'No bus numbers added yet',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            SizedBox(height: AppSizes.paddingSmall),
+                            Text(
+                              'Add bus numbers for drivers to select',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: AppColors.textSecondary,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSizes.paddingMedium),
+                        itemCount: _busNumbers.length,
+                        itemBuilder: (context, index) {
+                          final busNumber = _busNumbers[index];
+                          final isAssigned = _buses.any((bus) => bus.busNumber == busNumber);
+                          
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: AppSizes.paddingMedium),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: isAssigned ? AppColors.success : AppColors.warning,
+                                child: Icon(
+                                  isAssigned ? Icons.check : Icons.directions_bus,
+                                  color: AppColors.onPrimary,
+                                ),
+                              ),
+                              title: Text(
+                                busNumber,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Text(
+                                isAssigned ? 'Assigned to driver' : 'Available',
+                                style: TextStyle(
+                                  color: isAssigned ? AppColors.success : AppColors.warning,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete, color: AppColors.error),
+                                onPressed: () async {
+                                  if (isAssigned) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Cannot delete assigned bus number'),
+                                        backgroundColor: AppColors.error,
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  
+                                  final confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: const Text('Delete Bus Number'),
+                                      content: Text('Are you sure you want to delete $busNumber?'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.of(context).pop(false),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        ElevatedButton(
+                                          onPressed: () => Navigator.of(context).pop(true),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: AppColors.error,
+                                          ),
+                                          child: const Text('Delete'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  
+                                  if (confirmed == true) {
+                                    final authService = Provider.of<AuthService>(context, listen: false);
+                                    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+                                    final collegeId = authService.currentUserModel?.collegeId;
+                                    
+                                    if (collegeId != null) {
+                                      await firestoreService.removeBusNumber(collegeId, busNumber);
+                                      if (!mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Bus number $busNumber deleted'),
+                                          backgroundColor: AppColors.success,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+
+          // College Information Tab
+          Padding(
+            padding: const EdgeInsets.all(AppSizes.paddingMedium),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'College Information',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppSizes.paddingLarge),
+                
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSizes.paddingMedium),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'College Details',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: AppSizes.paddingMedium),
+                        
+                        _buildInfoRow('College Name', _college?.name ?? 'N/A'),
+                        _buildInfoRow('College ID', user?.collegeId ?? 'N/A'),
+                        _buildInfoRow('Allowed Domains', _college?.allowedDomains.join(', ') ?? 'N/A'),
+                        _buildInfoRow('Verification Status', _college?.verified == true ? 'Verified' : 'Pending'),
+                        _buildInfoRow('Your Role', user?.role.displayName ?? 'N/A'),
+                        _buildInfoRow('Email', user?.email ?? 'N/A'),
+                        _buildInfoRow('Status', user?.approved == true ? 'Approved' : 'Pending'),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: AppSizes.paddingMedium),
+                
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSizes.paddingMedium),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Statistics',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: AppSizes.paddingMedium),
+                        
+                        _buildInfoRow('Total Routes', _routes.length.toString()),
+                        _buildInfoRow('Pickup Routes', _routes.where((r) => r.routeType == 'pickup').length.toString()),
+                        _buildInfoRow('Drop Routes', _routes.where((r) => r.routeType == 'drop').length.toString()),
+                        _buildInfoRow('Total Buses', _buses.length.toString()),
+                        _buildInfoRow('Active Buses', _buses.where((b) => b.isActive).length.toString()),
+                        _buildInfoRow('Pending Drivers', _pendingDrivers.length.toString()),
+                        _buildInfoRow('Available Bus Numbers', _busNumbers.length.toString()),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSizes.paddingMedium),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              size: 32,
+              color: color,
+            ),
+            const SizedBox(height: AppSizes.paddingSmall),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: AppSizes.paddingSmall),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -705,7 +956,7 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 120,
+            width: 140,
             child: Text(
               label,
               style: const TextStyle(

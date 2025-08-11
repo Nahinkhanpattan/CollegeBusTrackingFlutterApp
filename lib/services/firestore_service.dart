@@ -262,6 +262,48 @@ class FirestoreService {
       throw Exception('Error deleting schedule: $e');
     }
   }
+
+  // Bus number operations
+  Future<void> addBusNumber(String collegeId, String busNumber) async {
+    try {
+      await _firestore
+          .collection(FirebaseCollections.busNumbers)
+          .doc('${collegeId}_$busNumber')
+          .set({
+        'busNumber': busNumber,
+        'collegeId': collegeId,
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      throw Exception('Error adding bus number: $e');
+    }
+  }
+
+  Future<void> removeBusNumber(String collegeId, String busNumber) async {
+    try {
+      await _firestore
+          .collection(FirebaseCollections.busNumbers)
+          .doc('${collegeId}_$busNumber')
+          .delete();
+    } catch (e) {
+      throw Exception('Error removing bus number: $e');
+    }
+  }
+
+  Stream<List<String>> getBusNumbers(String collegeId) {
+    try {
+      return _firestore
+          .collection(FirebaseCollections.busNumbers)
+          .where('collegeId', isEqualTo: collegeId)
+          .snapshots()
+          .map((snapshot) => snapshot.docs
+              .map((doc) => doc.data()['busNumber'] as String)
+              .toList());
+    } catch (e) {
+      return Stream.value([]);
+    }
+  }
+  
   // Bus location operations
   Future<void> updateBusLocation(String busId, BusLocationModel location) async {
     try {
