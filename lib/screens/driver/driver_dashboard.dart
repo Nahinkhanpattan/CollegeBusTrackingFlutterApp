@@ -185,7 +185,7 @@ class _DriverDashboardState extends State<DriverDashboard>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.onPrimary,
-                          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
+          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
           indicatorColor: AppColors.onPrimary,
           tabs: const [
             Tab(text: 'Bus Setup', icon: Icon(Icons.settings)),
@@ -199,27 +199,33 @@ class _DriverDashboardState extends State<DriverDashboard>
           // Bus Setup Tab
           Column(
             children: [
-              // Location display
-              if (_currentLocation != null)
-                Container(
-                  padding: const EdgeInsets.all(AppSizes.paddingMedium),
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.location_on, color: AppColors.primary),
-                      const SizedBox(width: AppSizes.paddingSmall),
-                      Expanded(
-                        child: Text(
-                          'Your Location: ${_currentLocation!.latitude.toStringAsFixed(4)}, ${_currentLocation!.longitude.toStringAsFixed(4)}',
-                          style: const TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w500,
-                          ),
+              // Location display - Always show this
+              Container(
+                padding: const EdgeInsets.all(AppSizes.paddingMedium),
+                color: _currentLocation != null 
+                    ? AppColors.primary.withValues(alpha: 0.1)
+                    : AppColors.warning.withValues(alpha: 0.1),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.location_on, 
+                      color: _currentLocation != null ? AppColors.primary : AppColors.warning
+                    ),
+                    const SizedBox(width: AppSizes.paddingSmall),
+                    Expanded(
+                      child: Text(
+                        _currentLocation != null
+                            ? 'Your Location: ${_currentLocation!.latitude.toStringAsFixed(4)}, ${_currentLocation!.longitude.toStringAsFixed(4)}'
+                            : 'Location not available. Please enable location services.',
+                        style: TextStyle(
+                          color: _currentLocation != null ? AppColors.primary : AppColors.warning,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+              ),
               
               Expanded(
                 child: Padding(
@@ -251,6 +257,7 @@ class _DriverDashboardState extends State<DriverDashboard>
                           decoration: const InputDecoration(
                             labelText: 'Select Bus Number',
                             border: OutlineInputBorder(),
+                            hintText: 'Choose your bus number',
                           ),
                         ),
                         const SizedBox(height: AppSizes.paddingMedium),
@@ -268,58 +275,104 @@ class _DriverDashboardState extends State<DriverDashboard>
                           decoration: const InputDecoration(
                             labelText: 'Select Route',
                             border: OutlineInputBorder(),
+                            hintText: 'Choose your route',
                           ),
                         ),
                         const SizedBox(height: AppSizes.paddingLarge),
-                        CustomButton(
-                          text: 'Assign Bus',
-                          onPressed: () async {
-                            if (_selectedRoute == null || _selectedBusNumber == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Please select both route and bus number'),
-                                  backgroundColor: AppColors.error,
-                                ),
-                              );
-                              return;
-                            }
-                            final authService = Provider.of<AuthService>(context, listen: false);
-                            final firestoreService = Provider.of<FirestoreService>(context, listen: false);
-                            final currentUser = authService.currentUserModel;
-                            if (currentUser == null) return;
-                            final newBus = BusModel(
-                              id: DateTime.now().millisecondsSinceEpoch.toString(),
-                              busNumber: _selectedBusNumber!,
-                              driverId: currentUser.id,
-                              routeId: _selectedRoute!.id,
-                              collegeId: currentUser.collegeId,
-                              createdAt: DateTime.now(),
-                            );
-                            await firestoreService.createBus(newBus);
-                            setState(() => _myBus = newBus);
-                          },
-                          icon: const Icon(Icons.directions_bus),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: (_selectedRoute != null && _selectedBusNumber != null)
+                                ? () async {
+                                    final authService = Provider.of<AuthService>(context, listen: false);
+                                    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+                                    final currentUser = authService.currentUserModel;
+                                    if (currentUser == null) return;
+                                    
+                                    final newBus = BusModel(
+                                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                      busNumber: _selectedBusNumber!,
+                                      driverId: currentUser.id,
+                                      routeId: _selectedRoute!.id,
+                                      collegeId: currentUser.collegeId,
+                                      createdAt: DateTime.now(),
+                                    );
+                                    
+                                    await firestoreService.createBus(newBus);
+                                    if (!mounted) return;
+                                    setState(() => _myBus = newBus);
+                                    
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Bus assigned successfully!'),
+                                        backgroundColor: AppColors.success,
+                                      ),
+                                    );
+                                  }
+                                : null,
+                            icon: const Icon(Icons.directions_bus),
+                            label: const Text('Assign Bus'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: AppColors.onPrimary,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                          ),
                         ),
                       ] else ...[
-                        Text(
-                          'Bus: ${_myBus!.busNumber}',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(AppSizes.paddingMedium),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Bus: ${_myBus!.busNumber}',
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: AppSizes.paddingSmall),
+                                if (_selectedRoute != null) ...[
+                                  Text(
+                                    'Route: ${_selectedRoute!.routeName}',
+                                    style: const TextStyle(fontSize: 16, color: AppColors.textSecondary),
+                                  ),
+                                  Text(
+                                    'Type: ${_selectedRoute!.routeType.toUpperCase()}',
+                                    style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                                  ),
+                                  Text(
+                                    '${_selectedRoute!.startPoint} → ${_selectedRoute!.endPoint}',
+                                    style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                                  ),
+                                ],
+                                const SizedBox(height: AppSizes.paddingMedium),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () async {
+                                      final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+                                      await firestoreService.deleteBus(_myBus!.id);
+                                      if (!mounted) return;
+                                      setState(() => _myBus = null);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Bus assignment removed'),
+                                          backgroundColor: AppColors.warning,
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.remove_circle),
+                                    label: const Text('Remove Assignment'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.error,
+                                      foregroundColor: AppColors.onPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: AppSizes.paddingSmall),
-                        if (_selectedRoute != null) ...[
-                          Text(
-                            'Route: ${_selectedRoute!.routeName}',
-                            style: const TextStyle(fontSize: 16, color: AppColors.textSecondary),
-                          ),
-                          Text(
-                            'Type: ${_selectedRoute!.routeType.toUpperCase()}',
-                            style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                          ),
-                          Text(
-                            '${_selectedRoute!.startPoint} → ${_selectedRoute!.endPoint}',
-                            style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                          ),
-                        ],
                       ],
                     ],
                   ),

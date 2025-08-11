@@ -65,7 +65,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _getCurrentLocation();
     _loadRoutes();
     _loadBuses();
@@ -334,6 +334,10 @@ class _TeacherDashboardState extends State<TeacherDashboard>
             },
           ),
           IconButton(
+            icon: const Icon(Icons.schedule),
+            onPressed: () => context.go('/teacher/schedule'),
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await authService.signOut();
@@ -352,6 +356,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
             Tab(text: 'Track Buses', icon: Icon(Icons.map)),
             Tab(text: 'Bus List', icon: Icon(Icons.list)),
             Tab(text: 'Approvals', icon: Icon(Icons.approval)),
+            Tab(text: 'Bus Info', icon: Icon(Icons.info)),
           ],
         ),
       ),
@@ -361,27 +366,33 @@ class _TeacherDashboardState extends State<TeacherDashboard>
           // Bus Tracking Tab
           Column(
             children: [
-              // Location display
-              if (_currentLocation != null)
-                Container(
-                  padding: const EdgeInsets.all(AppSizes.paddingMedium),
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.location_on, color: AppColors.primary),
-                      const SizedBox(width: AppSizes.paddingSmall),
-                      Expanded(
-                        child: Text(
-                          'Your Location: ${_currentLocation!.latitude.toStringAsFixed(4)}, ${_currentLocation!.longitude.toStringAsFixed(4)}',
-                          style: const TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w500,
-                          ),
+              // Location display - Always show this
+              Container(
+                padding: const EdgeInsets.all(AppSizes.paddingMedium),
+                color: _currentLocation != null 
+                    ? AppColors.primary.withValues(alpha: 0.1)
+                    : AppColors.warning.withValues(alpha: 0.1),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.location_on, 
+                      color: _currentLocation != null ? AppColors.primary : AppColors.warning
+                    ),
+                    const SizedBox(width: AppSizes.paddingSmall),
+                    Expanded(
+                      child: Text(
+                        _currentLocation != null
+                            ? 'Your Location: ${_currentLocation!.latitude.toStringAsFixed(4)}, ${_currentLocation!.longitude.toStringAsFixed(4)}'
+                            : 'Location not available. Please enable location services.',
+                        style: TextStyle(
+                          color: _currentLocation != null ? AppColors.primary : AppColors.warning,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+              ),
               
               // Filter Controls
               Container(
@@ -670,6 +681,113 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                     );
                   },
                 ),
+          
+          // Bus Info Tab
+          Padding(
+            padding: const EdgeInsets.all(AppSizes.paddingMedium),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Available Bus Numbers',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppSizes.paddingMedium),
+                Expanded(
+                  child: _allBusNumbers.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No bus numbers available',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _allBusNumbers.length,
+                          itemBuilder: (context, index) {
+                            final busNumber = _allBusNumbers[index];
+                            final isAssigned = _allBuses.any((bus) => bus.busNumber == busNumber);
+                            
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: AppSizes.paddingSmall),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: isAssigned ? AppColors.success : AppColors.warning,
+                                  child: Icon(
+                                    isAssigned ? Icons.check : Icons.directions_bus,
+                                    color: AppColors.onPrimary,
+                                  ),
+                                ),
+                                title: Text(
+                                  busNumber,
+                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                                subtitle: Text(
+                                  isAssigned ? 'Assigned to driver' : 'Available',
+                                  style: TextStyle(
+                                    color: isAssigned ? AppColors.success : AppColors.warning,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+                const SizedBox(height: AppSizes.paddingMedium),
+                const Text(
+                  'All Stops',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppSizes.paddingMedium),
+                Expanded(
+                  child: _allStops.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No stops available',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _allStops.length,
+                          itemBuilder: (context, index) {
+                            final stop = _allStops[index];
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: AppSizes.paddingSmall),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: AppColors.primary,
+                                  child: const Icon(
+                                    Icons.location_on,
+                                    color: AppColors.onPrimary,
+                                  ),
+                                ),
+                                title: Text(
+                                  stop,
+                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                                subtitle: Text(
+                                  'Bus stop location',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

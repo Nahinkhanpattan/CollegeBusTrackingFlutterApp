@@ -21,20 +21,39 @@ class LocationService {
 
   Future<LatLng?> getCurrentLocation() async {
     try {
-      final hasPermission = await checkLocationPermission();
-      if (!hasPermission) {
-        final granted = await requestLocationPermission();
-        if (!granted) return null;
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        // Location services are not enabled
+        return null;
       }
 
+      // Check location permission
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          // Permissions are denied
+          return null;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        // Permissions are permanently denied
+        return null;
+      }
+
+      // Get current position
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
         ),
       );
 
       return LatLng(position.latitude, position.longitude);
     } catch (e) {
+      print('Error getting location: $e');
       return null;
     }
   }

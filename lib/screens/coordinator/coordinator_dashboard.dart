@@ -74,13 +74,17 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
     final authService = Provider.of<AuthService>(context, listen: false);
     final firestoreService = Provider.of<FirestoreService>(context, listen: false);
     final collegeId = authService.currentUserModel?.collegeId;
-    if (collegeId != null) {
-      firestoreService.getRoutesByCollege(collegeId).listen((routes) {
-        setState(() {
-          _routes = routes;
-        });
-      });
+    if (collegeId == null) {
+      print('DEBUG: College ID is null for routes');
+      return;
     }
+    print('DEBUG: Loading routes for college: $collegeId');
+    firestoreService.getRoutesByCollege(collegeId).listen((routes) {
+      print('DEBUG: Received ${routes.length} routes');
+      setState(() {
+        _routes = routes;
+      });
+    });
   }
 
   Future<void> _loadCollege() async {
@@ -99,13 +103,17 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
     final authService = Provider.of<AuthService>(context, listen: false);
     final firestoreService = Provider.of<FirestoreService>(context, listen: false);
     final collegeId = authService.currentUserModel?.collegeId;
-    if (collegeId != null) {
-      firestoreService.getBusNumbers(collegeId).listen((busNumbers) {
-        setState(() {
-          _busNumbers = busNumbers;
-        });
-      });
+    if (collegeId == null) {
+      print('DEBUG: College ID is null');
+      return;
     }
+    print('DEBUG: Loading bus numbers for college: $collegeId');
+    firestoreService.getBusNumbers(collegeId).listen((busNumbers) {
+      print('DEBUG: Received ${busNumbers.length} bus numbers');
+      setState(() {
+        _busNumbers = busNumbers;
+      });
+    });
   }
 
   Future<void> _approveDriver(UserModel driver) async {
@@ -952,26 +960,26 @@ class _CoordinatorDashboardState extends State<CoordinatorDashboard>
   Widget _buildInfoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingSmall),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 140,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
-              ),
+          Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w500,
+              color: AppColors.textSecondary,
+              fontSize: 12,
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-              ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 14,
             ),
+            softWrap: true,
+            overflow: TextOverflow.visible,
           ),
         ],
       ),

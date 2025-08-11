@@ -165,6 +165,17 @@ class FirestoreService {
     }
   }
 
+  Future<void> deleteBus(String busId) async {
+    try {
+      await _firestore
+          .collection(FirebaseCollections.buses)
+          .doc(busId)
+          .delete();
+    } catch (e) {
+      throw Exception('Error deleting bus: $e');
+    }
+  }
+
   // Route operations
   Future<void> createRoute(RouteModel route) async {
     try {
