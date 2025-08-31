@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-
 import 'package:collegebus/models/bus_model.dart';
 import 'package:collegebus/models/route_model.dart';
 import 'package:collegebus/models/schedule_model.dart';
 import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/services/firestore_service.dart';
-import 'package:collegebus/services/location_service.dart';
 import 'package:collegebus/utils/constants.dart';
 
 class ScheduleManagementScreen extends StatefulWidget {
@@ -25,27 +22,18 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
   List<ScheduleModel> _secondShiftSchedules = [];
   List<RouteModel> _routes = [];
   List<BusModel> _buses = [];
-  LatLng? _currentLocation;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadData();
-    _getCurrentLocation();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
-  }
-
-  Future<void> _getCurrentLocation() async {
-    final locationService = Provider.of<LocationService>(context, listen: false);
-    final location = await locationService.getCurrentLocation();
-    if (!mounted) return;
-    setState(() => _currentLocation = location);
   }
 
   Future<void> _loadData() async {
@@ -77,7 +65,6 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
   void _showCreateScheduleDialog(String shift) {
     RouteModel? selectedRoute;
     BusModel? selectedBus;
-    final TextEditingController startTimeController = TextEditingController();
 
     showDialog(
       context: context,
@@ -85,7 +72,7 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: Text('Create $shift Shift Schedule'),
+              title: Text('Create $shift Shift Timetable'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -100,7 +87,7 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
                           .map((route) => DropdownMenuItem(
                                 value: route,
                                 child: Text(
-                                  route.displayName,
+                                  '${route.routeName} (${route.routeType.toUpperCase()})',
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ))
@@ -128,15 +115,6 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
                               ))
                           .toList(),
                       onChanged: (bus) => setState(() => selectedBus = bus),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: startTimeController,
-                      decoration: InputDecoration(
-                        labelText: '$shift Shift Start Time',
-                        hintText: 'HH:MM (e.g., 08:00)',
-                        border: const OutlineInputBorder(),
-                      ),
                     ),
                     const SizedBox(height: 16),
                     if (selectedRoute != null) ...[
@@ -175,6 +153,28 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
                           ],
                         ),
                       ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.success.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Note:',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'This will create a timetable showing which bus goes to which stops. No specific times are needed.',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ],
                 ),
@@ -185,12 +185,12 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: selectedRoute != null && selectedBus != null && startTimeController.text.trim().isNotEmpty
+                  onPressed: selectedRoute != null && selectedBus != null
                       ? () async {
                           final authService = Provider.of<AuthService>(context, listen: false);
                           final firestoreService = Provider.of<FirestoreService>(context, listen: false);
                           
-                          // Create simple stop schedules with just the start time
+                          // Create stop schedules without specific times
                           final stopSchedules = <StopSchedule>[];
                           final allStops = [
                             selectedRoute!.startPoint,
@@ -198,11 +198,11 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
                             selectedRoute!.endPoint,
                           ];
                           
-                          for (int i = 0; i < allStops.length; i++) {
+                          for (final stop in allStops) {
                             stopSchedules.add(StopSchedule(
-                              stopName: allStops[i],
-                              arrivalTime: startTimeController.text.trim(),
-                              departureTime: startTimeController.text.trim(),
+                              stopName: stop,
+                              arrivalTime: 'As per schedule',
+                              departureTime: 'As per schedule',
                             ));
                           }
                           
@@ -222,13 +222,13 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
                           Navigator.of(context).pop();
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('$shift shift schedule created successfully'),
+                              content: Text('$shift shift timetable created successfully'),
                               backgroundColor: AppColors.success,
                             ),
                           );
                         }
                       : null,
-                  child: const Text('Create Schedule'),
+                  child: const Text('Create Timetable'),
                 ),
               ],
             );
@@ -243,7 +243,7 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Schedule Management'),
+        title: const Text('Bus Timetables'),
         backgroundColor: AppColors.primary,
         foregroundColor: AppColors.onPrimary,
         bottom: TabBar(
@@ -257,37 +257,11 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
           ],
         ),
       ),
-      body: Column(
+      body: TabBarView(
+        controller: _tabController,
         children: [
-          if (_currentLocation != null)
-            Container(
-              padding: const EdgeInsets.all(AppSizes.paddingMedium),
-              color: AppColors.primary.withValues(alpha: 0.1),
-              child: Row(
-                children: [
-                  const Icon(Icons.location_on, color: AppColors.primary),
-                  const SizedBox(width: AppSizes.paddingSmall),
-                  Expanded(
-                    child: Text(
-                      'Current Location: ${_currentLocation!.latitude.toStringAsFixed(4)}, ${_currentLocation!.longitude.toStringAsFixed(4)}',
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildScheduleTab('1st', _firstShiftSchedules),
-                _buildScheduleTab('2nd', _secondShiftSchedules),
-              ],
-            ),
-          ),
+          _buildScheduleTab('1st', _firstShiftSchedules),
+          _buildScheduleTab('2nd', _secondShiftSchedules),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -298,7 +272,7 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
         backgroundColor: AppColors.primary,
         foregroundColor: AppColors.onPrimary,
         icon: const Icon(Icons.add),
-        label: const Text('Create Schedule'),
+        label: const Text('Create Timetable'),
       ),
     );
   }
@@ -316,7 +290,7 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
             ),
             const SizedBox(height: AppSizes.paddingMedium),
             Text(
-              'No $shift shift schedules created yet',
+              'No $shift shift timetables created yet',
               style: const TextStyle(
                 fontSize: 18,
                 color: AppColors.textSecondary,
@@ -324,7 +298,7 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
             ),
             const SizedBox(height: AppSizes.paddingSmall),
             const Text(
-              'Tap the + button to create a schedule',
+              'Tap the + button to create a timetable',
               style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
             ),
           ],
@@ -379,9 +353,55 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
               children: [
                 Text('Route: ${route.routeName}'),
                 Text('Type: ${route.routeType.toUpperCase()}'),
-                if (schedule.stopSchedules.isNotEmpty)
-                  Text('Start Time: ${schedule.stopSchedules.first.arrivalTime}'),
+                Text('${route.startPoint} → ${route.endPoint}'),
               ],
+            ),
+            trailing: PopupMenuButton(
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete, color: AppColors.error),
+                      SizedBox(width: 8),
+                      Text('Delete'),
+                    ],
+                  ),
+                ),
+              ],
+              onSelected: (value) async {
+                if (value == 'delete') {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Delete Timetable'),
+                      content: const Text('Are you sure you want to delete this timetable?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true) {
+                    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+                    await firestoreService.deleteSchedule(schedule.id);
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Timetable deleted successfully'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                  }
+                }
+              },
             ),
             children: [
               Padding(
@@ -390,61 +410,85 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Route Details:',
+                      'Bus Stops on this Route:',
                       style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                     ),
                     const SizedBox(height: AppSizes.paddingSmall),
-                    Text('${route.startPoint} → ${route.endPoint}'),
-                    if (route.stopPoints.isNotEmpty) ...[
-                      const SizedBox(height: AppSizes.paddingSmall),
-                      Text('Stops: ${route.stopPoints.join(' → ')}'),
-                    ],
-                    const SizedBox(height: AppSizes.paddingMedium),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton.icon(
-                          onPressed: () {},
-                          icon: const Icon(Icons.edit, size: 16),
-                          label: const Text('Edit'),
-                        ),
-                        const SizedBox(width: AppSizes.paddingSmall),
-                        TextButton.icon(
-                          onPressed: () async {
-                            final confirmed = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Delete Schedule'),
-                                content: const Text('Are you sure you want to delete this schedule?'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.of(context).pop(false),
-                                    child: const Text('Cancel'),
-                                  ),
-                                  ElevatedButton(
-                                    onPressed: () => Navigator.of(context).pop(true),
-                                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-                                    child: const Text('Delete'),
-                                  ),
-                                ],
+                    
+                    // Show route stops in order
+                    Column(
+                      children: schedule.stopSchedules.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final stopSchedule = entry.value;
+                        final isStart = index == 0;
+                        final isEnd = index == schedule.stopSchedules.length - 1;
+                        
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isStart 
+                                ? AppColors.success.withValues(alpha: 0.1)
+                                : isEnd 
+                                    ? AppColors.error.withValues(alpha: 0.1)
+                                    : AppColors.warning.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isStart 
+                                  ? AppColors.success
+                                  : isEnd 
+                                      ? AppColors.error
+                                      : AppColors.warning,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isStart 
+                                    ? Icons.play_arrow
+                                    : isEnd 
+                                        ? Icons.stop
+                                        : Icons.location_on,
+                                color: isStart 
+                                    ? AppColors.success
+                                    : isEnd 
+                                        ? AppColors.error
+                                        : AppColors.warning,
                               ),
-                            );
-                            if (confirmed == true) {
-                              final firestoreService = Provider.of<FirestoreService>(context, listen: false);
-                              await firestoreService.deleteSchedule(schedule.id);
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Schedule deleted successfully'),
-                                  backgroundColor: AppColors.success,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      stopSchedule.stopName,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    Text(
+                                      isStart 
+                                          ? 'Starting Point'
+                                          : isEnd 
+                                              ? 'End Point'
+                                              : 'Bus Stop',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isStart 
+                                            ? AppColors.success
+                                            : isEnd 
+                                                ? AppColors.error
+                                                : AppColors.warning,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              );
-                            }
-                          },
-                          icon: const Icon(Icons.delete, size: 16, color: AppColors.error),
-                          label: const Text('Delete', style: TextStyle(color: AppColors.error)),
-                        ),
-                      ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
                     ),
                   ],
                 ),
@@ -456,5 +500,3 @@ class _ScheduleManagementScreenState extends State<ScheduleManagementScreen>
     );
   }
 }
-
-

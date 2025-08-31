@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/services/firestore_service.dart';
 import 'package:collegebus/services/location_service.dart';
@@ -29,7 +30,9 @@ class _TeacherDashboardState extends State<TeacherDashboard>
   List<UserModel> _pendingStudents = [];
   String? _selectedStop;
   String? _selectedBusNumber;
+  String? _selectedRouteType;
   List<RouteModel> _routes = [];
+  Set<Polyline> _polylines = {};
 
   // Get unique stops from all buses
   List<String> get _allStops {
@@ -70,12 +73,59 @@ class _TeacherDashboardState extends State<TeacherDashboard>
     _loadRoutes();
     _loadBuses();
     _loadPendingStudents();
+    _loadSavedFilters();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSavedFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final userId = authService.currentUserModel?.id;
+    
+    if (userId != null) {
+      final savedStop = prefs.getString('teacher_${userId}_selected_stop');
+      final savedBusNumber = prefs.getString('teacher_${userId}_selected_bus');
+      final savedRouteType = prefs.getString('teacher_${userId}_selected_route_type');
+      
+      setState(() {
+        _selectedStop = savedStop;
+        _selectedBusNumber = savedBusNumber;
+        _selectedRouteType = savedRouteType;
+      });
+      
+      _applyFilters();
+    }
+  }
+
+  Future<void> _saveFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final userId = authService.currentUserModel?.id;
+    
+    if (userId != null) {
+      if (_selectedStop != null) {
+        await prefs.setString('teacher_${userId}_selected_stop', _selectedStop!);
+      } else {
+        await prefs.remove('teacher_${userId}_selected_stop');
+      }
+      
+      if (_selectedBusNumber != null) {
+        await prefs.setString('teacher_${userId}_selected_bus', _selectedBusNumber!);
+      } else {
+        await prefs.remove('teacher_${userId}_selected_bus');
+      }
+      
+      if (_selectedRouteType != null) {
+        await prefs.setString('teacher_${userId}_selected_route_type', _selectedRouteType!);
+      } else {
+        await prefs.remove('teacher_${userId}_selected_route_type');
+      }
+    }
   }
 
   Future<void> _getCurrentLocation() async {
@@ -135,6 +185,28 @@ class _TeacherDashboardState extends State<TeacherDashboard>
   void _applyFilters() {
     List<BusModel> filtered = List.from(_allBuses);
 
+    // Filter by route type
+    if (_selectedRouteType != null) {
+      filtered = filtered.where((bus) {
+        final route = _routes.firstWhere(
+          (r) => r.id == bus.routeId,
+          orElse: () => RouteModel(
+            id: '',
+            routeName: 'N/A',
+            routeType: '',
+            startPoint: '',
+            endPoint: '',
+            stopPoints: [],
+            collegeId: '',
+            createdBy: '',
+            isActive: false,
+            createdAt: DateTime.now(),
+          ),
+        );
+        return route.routeType == _selectedRouteType;
+      }).toList();
+    }
+
     // Filter by selected stop
     if (_selectedStop != null) {
       filtered = filtered.where((bus) {
@@ -167,6 +239,8 @@ class _TeacherDashboardState extends State<TeacherDashboard>
     setState(() {
       _filteredBuses = filtered;
     });
+    
+    _saveFilters();
   }
 
   void _updateMarkers() {
@@ -189,9 +263,100 @@ class _TeacherDashboardState extends State<TeacherDashboard>
       _addBusMarker(bus, newMarkers);
     }
 
+    // If a bus is selected, show its route
+    if (_selectedBus != null) {
+      _addBusRoutePolyline(_selectedBus!);
+    } else {
+      setState(() {
+        _polylines = {};
+      });
+    }
+
     setState(() {
       _markers = newMarkers;
     });
+  }
+
+  void _addBusRoutePolyline(BusModel bus) {
+    final route = _routes.firstWhere(
+      (r) => r.id == bus.routeId,
+      orElse: () => RouteModel(
+        id: '',
+        routeName: 'N/A',
+        routeType: '',
+        startPoint: '',
+        endPoint: '',
+        stopPoints: [],
+        collegeId: '',
+        createdBy: '',
+        isActive: false,
+        createdAt: DateTime.now(),
+      ),
+    );
+    
+    final routePoints = <LatLng>[];
+    final startCoord = _getMockCoordinateForLocation(route.startPoint);
+    routePoints.add(startCoord);
+    
+    for (final stop in route.stopPoints) {
+      routePoints.add(_getMockCoordinateForLocation(stop));
+    }
+    
+    final endCoord = _getMockCoordinateForLocation(route.endPoint);
+    routePoints.add(endCoord);
+    
+    final polyline = Polyline(
+      polylineId: PolylineId('route_${bus.id}'),
+      points: routePoints,
+      color: Colors.blue,
+      width: 4,
+    );
+    
+    setState(() {
+      _polylines = {polyline};
+    });
+    
+    // Add stop markers
+    for (int i = 0; i < routePoints.length; i++) {
+      final stopName = i == 0 ? route.startPoint : 
+                      i == routePoints.length - 1 ? route.endPoint :
+                      route.stopPoints[i - 1];
+      
+      _markers.add(
+        Marker(
+          markerId: MarkerId('stop_${bus.id}_$i'),
+          position: routePoints[i],
+          infoWindow: InfoWindow(
+            title: stopName,
+            snippet: i == 0 ? 'Start Point' : 
+                    i == routePoints.length - 1 ? 'End Point' : 'Stop',
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            i == 0 ? BitmapDescriptor.hueGreen : 
+            i == routePoints.length - 1 ? BitmapDescriptor.hueRed :
+            BitmapDescriptor.hueYellow
+          ),
+        ),
+      );
+    }
+  }
+
+  LatLng _getMockCoordinateForLocation(String location) {
+    final mockCoords = {
+      'Central Station': const LatLng(12.9716, 77.5946),
+      'City Center': const LatLng(12.9726, 77.5956),
+      'Shopping Mall': const LatLng(12.9736, 77.5966),
+      'Hospital': const LatLng(12.9746, 77.5976),
+      'University Campus': const LatLng(12.9756, 77.5986),
+      'Airport': const LatLng(12.9766, 77.5996),
+      'Hotel District': const LatLng(12.9776, 77.6006),
+      'Business Park': const LatLng(12.9786, 77.6016),
+      'Suburban Area': const LatLng(12.9796, 77.6026),
+      'Residential Area': const LatLng(12.9806, 77.6036),
+      'Park': const LatLng(12.9816, 77.6046),
+    };
+    
+    return mockCoords[location] ?? _currentLocation ?? const LatLng(12.9716, 77.5946);
   }
 
   void _addBusMarker(BusModel bus, Set<Marker> markers) {
@@ -211,6 +376,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
         createdAt: DateTime.now(),
       ),
     );
+    
     // Listen to real-time location updates for this bus
     firestoreService.getBusLocation(bus.id).listen((location) {
       if (location != null) {
@@ -227,6 +393,24 @@ class _TeacherDashboardState extends State<TeacherDashboard>
           onTap: () => _selectBus(bus),
         );
 
+        setState(() {
+          _markers.removeWhere((m) => m.markerId.value == 'bus_${bus.id}');
+          _markers.add(marker);
+        });
+      } else {
+        // Show bus at start point if no live location
+        final startLocation = _getMockCoordinateForLocation(route.startPoint);
+        final marker = Marker(
+          markerId: MarkerId('bus_${bus.id}'),
+          position: startLocation,
+          infoWindow: InfoWindow(
+            title: 'Bus ${bus.busNumber} (Not Live)',
+            snippet: '${route.startPoint} → ${route.endPoint}\nStatus: Offline',
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+          onTap: () => _selectBus(bus),
+        );
+        
         setState(() {
           _markers.removeWhere((m) => m.markerId.value == 'bus_${bus.id}');
           _markers.add(marker);
@@ -254,7 +438,6 @@ class _TeacherDashboardState extends State<TeacherDashboard>
   void _onStopSelected(String? stop) {
     setState(() {
       _selectedStop = stop;
-      _selectedBusNumber = null; // Clear bus number filter when stop is selected
     });
     _applyFilters();
     _updateMarkers();
@@ -263,7 +446,14 @@ class _TeacherDashboardState extends State<TeacherDashboard>
   void _onBusNumberSelected(String? busNumber) {
     setState(() {
       _selectedBusNumber = busNumber;
-      _selectedStop = null; // Clear stop filter when bus number is selected
+    });
+    _applyFilters();
+    _updateMarkers();
+  }
+
+  void _onRouteTypeSelected(String? routeType) {
+    setState(() {
+      _selectedRouteType = routeType;
     });
     _applyFilters();
     _updateMarkers();
@@ -273,7 +463,9 @@ class _TeacherDashboardState extends State<TeacherDashboard>
     setState(() {
       _selectedStop = null;
       _selectedBusNumber = null;
+      _selectedRouteType = null;
       _selectedBus = null;
+      _polylines.clear();
     });
     _applyFilters();
     _updateMarkers();
@@ -350,7 +542,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.onPrimary,
-                          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
+          unselectedLabelColor: AppColors.onPrimary.withValues(alpha: 0.7),
           indicatorColor: AppColors.onPrimary,
           tabs: const [
             Tab(text: 'Track Buses', icon: Icon(Icons.map)),
@@ -366,7 +558,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
           // Bus Tracking Tab
           Column(
             children: [
-              // Location display - Always show this
+              // Location display
               Container(
                 padding: const EdgeInsets.all(AppSizes.paddingMedium),
                 color: _currentLocation != null 
@@ -404,9 +596,35 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String>(
+                            value: _selectedRouteType,
+                            decoration: const InputDecoration(
+                              labelText: 'Route Type',
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            ),
+                            items: const [
+                              DropdownMenuItem<String>(
+                                value: null,
+                                child: Text('All Types'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'pickup',
+                                child: Text('Pickup'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'drop',
+                                child: Text('Drop'),
+                              ),
+                            ],
+                            onChanged: _onRouteTypeSelected,
+                          ),
+                        ),
+                        const SizedBox(width: AppSizes.paddingSmall),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
                             value: _selectedStop,
                             decoration: const InputDecoration(
-                              labelText: 'Filter by Stop',
+                              labelText: 'Bus Stop',
                               border: OutlineInputBorder(),
                               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             ),
@@ -423,12 +641,16 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                             onChanged: _onStopSelected,
                           ),
                         ),
-                        const SizedBox(width: AppSizes.paddingMedium),
+                      ],
+                    ),
+                    const SizedBox(height: AppSizes.paddingSmall),
+                    Row(
+                      children: [
                         Expanded(
                           child: DropdownButtonFormField<String>(
                             value: _selectedBusNumber,
                             decoration: const InputDecoration(
-                              labelText: 'Filter by Bus',
+                              labelText: 'Bus Number',
                               border: OutlineInputBorder(),
                               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             ),
@@ -445,26 +667,27 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                             onChanged: _onBusNumberSelected,
                           ),
                         ),
-                      ],
-                    ),
-                    if (_selectedStop != null || _selectedBusNumber != null) ...[
-                      const SizedBox(height: AppSizes.paddingSmall),
-                      Row(
-                        children: [
-                          Chip(
-                            label: Text(_selectedStop ?? _selectedBusNumber ?? ''),
-                            onDeleted: _clearFilters,
-                            backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                          ),
-                          const SizedBox(width: AppSizes.paddingSmall),
-                          Text(
-                            '${_filteredBuses.length} bus(es) found',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
+                        const SizedBox(width: AppSizes.paddingSmall),
+                        if (_selectedStop != null || _selectedBusNumber != null || _selectedRouteType != null)
+                          ElevatedButton.icon(
+                            onPressed: _clearFilters,
+                            icon: const Icon(Icons.clear),
+                            label: const Text('Clear'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.warning,
+                              foregroundColor: AppColors.onPrimary,
                             ),
                           ),
-                        ],
+                      ],
+                    ),
+                    if (_selectedStop != null || _selectedBusNumber != null || _selectedRouteType != null) ...[
+                      const SizedBox(height: AppSizes.paddingSmall),
+                      Text(
+                        '${_filteredBuses.length} bus(es) found',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ],
@@ -483,6 +706,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                           zoom: 14.0,
                         ),
                         markers: _markers,
+                        polylines: _polylines,
                         myLocationEnabled: true,
                         myLocationButtonEnabled: true,
                       )
@@ -550,8 +774,8 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                       ),
                       const SizedBox(height: AppSizes.paddingMedium),
                       Text(
-                        _selectedStop != null || _selectedBusNumber != null
-                            ? 'No buses found for selected filter'
+                        _selectedStop != null || _selectedBusNumber != null || _selectedRouteType != null
+                            ? 'No buses found for selected filters'
                             : 'No buses available',
                         style: const TextStyle(
                           fontSize: 18,
@@ -567,6 +791,21 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                   itemBuilder: (context, index) {
                     final bus = _filteredBuses[index];
                     final isSelected = _selectedBus?.id == bus.id;
+                    final route = _routes.firstWhere(
+                      (r) => r.id == bus.routeId,
+                      orElse: () => RouteModel(
+                        id: '',
+                        routeName: 'N/A',
+                        routeType: '',
+                        startPoint: '',
+                        endPoint: '',
+                        stopPoints: [],
+                        collegeId: '',
+                        createdBy: '',
+                        isActive: false,
+                        createdAt: DateTime.now(),
+                      ),
+                    );
                     
                     return Card(
                       margin: const EdgeInsets.only(bottom: AppSizes.paddingMedium),
@@ -589,10 +828,11 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('${_routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).startPoint} → ${_routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).endPoint}'),
-                            if ((_routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).stopPoints.isNotEmpty))
+                            Text('${route.startPoint} → ${route.endPoint}'),
+                            Text('Type: ${route.routeType.toUpperCase()}'),
+                            if (route.stopPoints.isNotEmpty)
                               Text(
-                                'Stops: ${_routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).stopPoints.join(', ')}',
+                                'Stops: ${route.stopPoints.join(', ')}',
                                 style: const TextStyle(fontSize: 12),
                               ),
                           ],
@@ -604,7 +844,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                           _selectBus(bus);
                           _tabController.animateTo(0); // Switch to map tab
                         },
-                        isThreeLine: _routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).stopPoints.isNotEmpty,
+                        isThreeLine: route.stopPoints.isNotEmpty,
                       ),
                     );
                   },
@@ -623,7 +863,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                       ),
                       SizedBox(height: AppSizes.paddingMedium),
                       Text(
-                        'No pending approvals',
+                        'No pending student approvals',
                         style: TextStyle(
                           fontSize: 18,
                           color: AppColors.textSecondary,
@@ -654,6 +894,8 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                             Text(student.email),
                             if (student.phoneNumber != null && student.phoneNumber!.isNotEmpty)
                               Text('Phone: ${student.phoneNumber}'),
+                            if (student.rollNumber != null && student.rollNumber!.isNotEmpty)
+                              Text('Roll: ${student.rollNumber}'),
                             Text(
                               'Role: ${student.role.displayName}',
                               style: const TextStyle(
@@ -773,7 +1015,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                                   stop,
                                   style: const TextStyle(fontWeight: FontWeight.w600),
                                 ),
-                                subtitle: Text(
+                                subtitle: const Text(
                                   'Bus stop location',
                                   style: TextStyle(
                                     color: AppColors.textSecondary,

@@ -5,9 +5,7 @@ import 'package:email_validator/email_validator.dart';
 import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/widgets/custom_input_field.dart';
 import 'package:collegebus/widgets/custom_button.dart';
-import 'package:collegebus/widgets/phone_input_field.dart';
 import 'package:collegebus/utils/constants.dart';
-import 'package:collegebus/auth/phone_otp_verification.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,7 +18,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _phoneController = TextEditingController();
   bool _isLoading = false;
   String? _pendingApprovalMessage;
   String? _lastTriedEmail;
@@ -140,7 +137,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -230,54 +226,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
+                
                 const SizedBox(height: AppSizes.paddingMedium),
-                if (_selectedRole == UserRole.driver) ...[
-                  // Phone number input with country code
-                  PhoneInputField(
-                    controller: _phoneController,
-                    label: 'Phone Number',
-                    hint: '9876543210',
-                  ),
-                  const SizedBox(height: AppSizes.paddingMedium),
-                  CustomButton(
-                    text: 'Login with OTP',
-                    onPressed: () {
-                      // Validate phone number
-                      final phoneNumber = _phoneController.text.trim();
-                      if (phoneNumber.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Please enter your phone number'),
-                            backgroundColor: AppColors.error,
-                          ),
-                        );
-                        return;
-                      }
-                      
-                      if (phoneNumber.length < 10) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Please enter a valid 10-digit phone number'),
-                            backgroundColor: AppColors.error,
-                          ),
-                        );
-                        return;
-                      }
-                      
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => PhoneOtpVerificationScreen(
-                            phoneNumber: phoneNumber, // Pass just the number, +91 will be added in OTP screen
-                            onVerified: (user) async {
-                              // Optionally, check Firestore for driver user and navigate
-                              context.go('/driver');
-                            },
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ] else ...[
+                
                 // Email field
                 CustomInputField(
                   label: 'Email',
@@ -331,14 +282,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
+                
                 const SizedBox(height: AppSizes.paddingLarge),
+                
                 // Login button
                 CustomButton(
                   text: AppStrings.loginButton,
                   onPressed: _handleLogin,
                   isLoading: _isLoading,
                 ),
+                
                 const SizedBox(height: AppSizes.paddingLarge),
+                
                 // Sign up link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -359,47 +314,47 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                 ),
-              ], // <-- This closes the else ...[ block for non-driver login
-              if (_pendingApprovalMessage != null)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.warning.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.warning),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.info, color: AppColors.warning),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _pendingApprovalMessage!,
-                          style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w600),
+                
+                if (_pendingApprovalMessage != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.warning),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.info, color: AppColors.warning),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _pendingApprovalMessage!,
+                            style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w600),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Retry Login'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: AppColors.onPrimary,
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry Login'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: AppColors.onPrimary,
+                          ),
+                          onPressed: _isLoading || _lastTriedEmail == null || _lastTriedPassword == null
+                              ? null
+                              : () => _handleLogin(email: _lastTriedEmail, password: _lastTriedPassword),
                         ),
-                        onPressed: _isLoading || _lastTriedEmail == null || _lastTriedPassword == null
-                            ? null
-                            : () => _handleLogin(email: _lastTriedEmail, password: _lastTriedPassword),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-            ], // <-- This closes the main Column's children
-          ), // <-- This closes the main Column
-        ), // <-- This closes the Form
-      ), // <-- This closes the SingleChildScrollView
-    ), // <-- This closes the SafeArea
-  ); // <-- This closes the Scaffold
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

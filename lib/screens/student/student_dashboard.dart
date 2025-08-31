@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/services/firestore_service.dart';
 import 'package:collegebus/services/location_service.dart';
@@ -31,6 +32,7 @@ class _StudentDashboardState extends State<StudentDashboard>
   Set<Polyline> _polylines = {};
   String? _selectedStop;
   String? _selectedBusNumber;
+  String? _selectedRouteType;
   List<RouteModel> _routes = [];
 
   // Get unique stops from all buses
@@ -71,12 +73,59 @@ class _StudentDashboardState extends State<StudentDashboard>
     _getCurrentLocation();
     _loadRoutes();
     _loadBuses();
+    _loadSavedFilters();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSavedFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final userId = authService.currentUserModel?.id;
+    
+    if (userId != null) {
+      final savedStop = prefs.getString('student_${userId}_selected_stop');
+      final savedBusNumber = prefs.getString('student_${userId}_selected_bus');
+      final savedRouteType = prefs.getString('student_${userId}_selected_route_type');
+      
+      setState(() {
+        _selectedStop = savedStop;
+        _selectedBusNumber = savedBusNumber;
+        _selectedRouteType = savedRouteType;
+      });
+      
+      _applyFilters();
+    }
+  }
+
+  Future<void> _saveFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final userId = authService.currentUserModel?.id;
+    
+    if (userId != null) {
+      if (_selectedStop != null) {
+        await prefs.setString('student_${userId}_selected_stop', _selectedStop!);
+      } else {
+        await prefs.remove('student_${userId}_selected_stop');
+      }
+      
+      if (_selectedBusNumber != null) {
+        await prefs.setString('student_${userId}_selected_bus', _selectedBusNumber!);
+      } else {
+        await prefs.remove('student_${userId}_selected_bus');
+      }
+      
+      if (_selectedRouteType != null) {
+        await prefs.setString('student_${userId}_selected_route_type', _selectedRouteType!);
+      } else {
+        await prefs.remove('student_${userId}_selected_route_type');
+      }
+    }
   }
 
   Future<void> _getCurrentLocation() async {
@@ -122,6 +171,28 @@ class _StudentDashboardState extends State<StudentDashboard>
   void _applyFilters() {
     List<BusModel> filtered = List.from(_allBuses);
 
+    // Filter by route type
+    if (_selectedRouteType != null) {
+      filtered = filtered.where((bus) {
+        final route = _routes.firstWhere(
+          (r) => r.id == bus.routeId,
+          orElse: () => RouteModel(
+            id: '',
+            routeName: 'N/A',
+            routeType: '',
+            startPoint: '',
+            endPoint: '',
+            stopPoints: [],
+            collegeId: '',
+            createdBy: '',
+            isActive: false,
+            createdAt: DateTime.now(),
+          ),
+        );
+        return route.routeType == _selectedRouteType;
+      }).toList();
+    }
+
     // Filter by selected stop
     if (_selectedStop != null) {
       filtered = filtered.where((bus) {
@@ -140,7 +211,6 @@ class _StudentDashboardState extends State<StudentDashboard>
             createdAt: DateTime.now(),
           ),
         );
-        // Show bus if the stop is start, end, or any stop in between
         return route.startPoint == _selectedStop ||
                route.endPoint == _selectedStop ||
                route.stopPoints.contains(_selectedStop);
@@ -155,6 +225,8 @@ class _StudentDashboardState extends State<StudentDashboard>
     setState(() {
       _filteredBuses = filtered;
     });
+    
+    _saveFilters();
   }
 
   void _updateMarkers() {
@@ -172,7 +244,7 @@ class _StudentDashboardState extends State<StudentDashboard>
       );
     }
 
-    // Show all filtered buses as markers (even if no bus is selected)
+    // Show all filtered buses as markers
     for (final bus in _filteredBuses) {
       _addBusMarker(bus, newMarkers);
     }
@@ -193,11 +265,6 @@ class _StudentDashboardState extends State<StudentDashboard>
   
   void _addBusRoutePolyline(BusModel bus) {
     if (_selectedBus?.id == bus.id) {
-      // Create route polyline for selected bus
-      final routePoints = <LatLng>[];
-      
-      // Add mock coordinates for demonstration
-      // In a real app, you'd get actual coordinates for each stop
       final route = _routes.firstWhere(
         (r) => r.id == bus.routeId,
         orElse: () => RouteModel(
@@ -213,6 +280,8 @@ class _StudentDashboardState extends State<StudentDashboard>
           createdAt: DateTime.now(),
         ),
       );
+      
+      final routePoints = <LatLng>[];
       final startCoord = _getMockCoordinateForLocation(route.startPoint);
       routePoints.add(startCoord);
       
@@ -226,9 +295,8 @@ class _StudentDashboardState extends State<StudentDashboard>
       final polyline = Polyline(
         polylineId: PolylineId('route_${bus.id}'),
         points: routePoints,
-        color: AppColors.primary,
+        color: Colors.blue,
         width: 4,
-        patterns: [PatternItem.dash(20), PatternItem.gap(10)],
       );
       
       setState(() {
@@ -253,7 +321,7 @@ class _StudentDashboardState extends State<StudentDashboard>
             icon: BitmapDescriptor.defaultMarkerWithHue(
               i == 0 ? BitmapDescriptor.hueGreen : 
               i == routePoints.length - 1 ? BitmapDescriptor.hueRed :
-              BitmapDescriptor.hueOrange
+              BitmapDescriptor.hueYellow
             ),
           ),
         );
@@ -262,7 +330,6 @@ class _StudentDashboardState extends State<StudentDashboard>
   }
   
   LatLng _getMockCoordinateForLocation(String location) {
-    // Mock coordinates - in a real app, use geocoding service
     final mockCoords = {
       'Central Station': const LatLng(12.9716, 77.5946),
       'City Center': const LatLng(12.9726, 77.5956),
@@ -360,7 +427,6 @@ class _StudentDashboardState extends State<StudentDashboard>
   void _onStopSelected(String? stop) {
     setState(() {
       _selectedStop = stop;
-      _selectedBusNumber = null; // Clear bus number filter when stop is selected
     });
     _applyFilters();
     _updateMarkers();
@@ -369,7 +435,14 @@ class _StudentDashboardState extends State<StudentDashboard>
   void _onBusNumberSelected(String? busNumber) {
     setState(() {
       _selectedBusNumber = busNumber;
-      _selectedStop = null; // Clear stop filter when bus number is selected
+    });
+    _applyFilters();
+    _updateMarkers();
+  }
+
+  void _onRouteTypeSelected(String? routeType) {
+    setState(() {
+      _selectedRouteType = routeType;
     });
     _applyFilters();
     _updateMarkers();
@@ -379,6 +452,7 @@ class _StudentDashboardState extends State<StudentDashboard>
     setState(() {
       _selectedStop = null;
       _selectedBusNumber = null;
+      _selectedRouteType = null;
       _selectedBus = null;
       _polylines.clear();
     });
@@ -394,7 +468,6 @@ class _StudentDashboardState extends State<StudentDashboard>
     
     final currentUser = authService.currentUserModel;
     if (currentUser != null) {
-      // Send notification to driver
       final notification = NotificationModel(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         senderId: currentUser.id,
@@ -466,7 +539,7 @@ class _StudentDashboardState extends State<StudentDashboard>
           // Map Tab
           Column(
             children: [
-              // Location display - Always show this
+              // Location display
               Container(
                 padding: const EdgeInsets.all(AppSizes.paddingMedium),
                 color: _currentLocation != null 
@@ -504,9 +577,35 @@ class _StudentDashboardState extends State<StudentDashboard>
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String>(
+                            value: _selectedRouteType,
+                            decoration: const InputDecoration(
+                              labelText: 'Route Type',
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            ),
+                            items: const [
+                              DropdownMenuItem<String>(
+                                value: null,
+                                child: Text('All Types'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'pickup',
+                                child: Text('Pickup'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'drop',
+                                child: Text('Drop'),
+                              ),
+                            ],
+                            onChanged: _onRouteTypeSelected,
+                          ),
+                        ),
+                        const SizedBox(width: AppSizes.paddingSmall),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
                             value: _selectedStop,
                             decoration: const InputDecoration(
-                              labelText: 'Filter by Stop',
+                              labelText: 'Bus Stop',
                               border: OutlineInputBorder(),
                               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             ),
@@ -523,12 +622,16 @@ class _StudentDashboardState extends State<StudentDashboard>
                             onChanged: _onStopSelected,
                           ),
                         ),
-                        const SizedBox(width: AppSizes.paddingMedium),
+                      ],
+                    ),
+                    const SizedBox(height: AppSizes.paddingSmall),
+                    Row(
+                      children: [
                         Expanded(
                           child: DropdownButtonFormField<String>(
                             value: _selectedBusNumber,
                             decoration: const InputDecoration(
-                              labelText: 'Filter by Bus',
+                              labelText: 'Bus Number',
                               border: OutlineInputBorder(),
                               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             ),
@@ -545,26 +648,27 @@ class _StudentDashboardState extends State<StudentDashboard>
                             onChanged: _onBusNumberSelected,
                           ),
                         ),
-                      ],
-                    ),
-                    if (_selectedStop != null || _selectedBusNumber != null) ...[
-                      const SizedBox(height: AppSizes.paddingSmall),
-                      Row(
-                        children: [
-                          Chip(
-                            label: Text(_selectedStop ?? _selectedBusNumber ?? ''),
-                            onDeleted: _clearFilters,
-                            backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                          ),
-                          const SizedBox(width: AppSizes.paddingSmall),
-                          Text(
-                            '${_filteredBuses.length} bus(es) found',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
+                        const SizedBox(width: AppSizes.paddingSmall),
+                        if (_selectedStop != null || _selectedBusNumber != null || _selectedRouteType != null)
+                          ElevatedButton.icon(
+                            onPressed: _clearFilters,
+                            icon: const Icon(Icons.clear),
+                            label: const Text('Clear'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.warning,
+                              foregroundColor: AppColors.onPrimary,
                             ),
                           ),
-                        ],
+                      ],
+                    ),
+                    if (_selectedStop != null || _selectedBusNumber != null || _selectedRouteType != null) ...[
+                      const SizedBox(height: AppSizes.paddingSmall),
+                      Text(
+                        '${_filteredBuses.length} bus(es) found',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ],
@@ -689,8 +793,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                       ),
                       const SizedBox(height: AppSizes.paddingMedium),
                       Text(
-                        _selectedStop != null || _selectedBusNumber != null
-                            ? 'No buses found for selected filter'
+                        _selectedStop != null || _selectedBusNumber != null || _selectedRouteType != null
+                            ? 'No buses found for selected filters'
                             : 'No buses available',
                         style: const TextStyle(
                           fontSize: 18,
@@ -706,6 +810,21 @@ class _StudentDashboardState extends State<StudentDashboard>
                   itemBuilder: (context, index) {
                     final bus = _filteredBuses[index];
                     final isSelected = _selectedBus?.id == bus.id;
+                    final route = _routes.firstWhere(
+                      (r) => r.id == bus.routeId,
+                      orElse: () => RouteModel(
+                        id: '',
+                        routeName: 'N/A',
+                        routeType: '',
+                        startPoint: '',
+                        endPoint: '',
+                        stopPoints: [],
+                        collegeId: '',
+                        createdBy: '',
+                        isActive: false,
+                        createdAt: DateTime.now(),
+                      ),
+                    );
                     
                     return Card(
                       margin: const EdgeInsets.only(bottom: AppSizes.paddingMedium),
@@ -728,10 +847,11 @@ class _StudentDashboardState extends State<StudentDashboard>
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('${_routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).startPoint} → ${_routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).endPoint}'),
-                            if ((_routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).stopPoints.isNotEmpty))
+                            Text('${route.startPoint} → ${route.endPoint}'),
+                            Text('Type: ${route.routeType.toUpperCase()}'),
+                            if (route.stopPoints.isNotEmpty)
                               Text(
-                                'Stops: ${_routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).stopPoints.join(', ')}',
+                                'Stops: ${route.stopPoints.join(', ')}',
                                 style: const TextStyle(fontSize: 12),
                               ),
                           ],
@@ -743,7 +863,7 @@ class _StudentDashboardState extends State<StudentDashboard>
                           _selectBus(bus);
                           _tabController.animateTo(0); // Switch to map tab
                         },
-                        isThreeLine: _routes.firstWhere((r) => r.id == bus.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).stopPoints.isNotEmpty,
+                        isThreeLine: route.stopPoints.isNotEmpty,
                       ),
                     );
                   },
@@ -840,7 +960,7 @@ class _StudentDashboardState extends State<StudentDashboard>
                                   stop,
                                   style: const TextStyle(fontWeight: FontWeight.w600),
                                 ),
-                                subtitle: Text(
+                                subtitle: const Text(
                                   'Bus stop location',
                                   style: TextStyle(
                                     color: AppColors.textSecondary,

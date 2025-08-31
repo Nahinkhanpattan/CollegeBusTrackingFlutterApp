@@ -8,8 +8,6 @@ import 'package:collegebus/widgets/custom_input_field.dart';
 import 'package:collegebus/widgets/custom_button.dart';
 import 'package:collegebus/utils/constants.dart';
 import 'package:collegebus/models/college_model.dart';
-import 'package:collegebus/auth/phone_otp_verification.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -77,59 +75,50 @@ class _RegisterScreenState extends State<RegisterScreen> {
       String collegeName = '';
       String? rollNumber = _selectedRole == UserRole.student ? _rollNumberController.text.trim() : null;
       String? phoneNumber = _phoneController.text.trim();
+      
       if (_selectedRole == UserRole.busCoordinator) {
         email = '${_emailIdController.text.trim()}@${_emailDomainController.text.trim()}';
         collegeName = _collegeController.text.trim();
-      } else if (_selectedRole == UserRole.driver) {
-        // Phone OTP flow for drivers
-        setState(() => _isLoading = false);
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => PhoneOtpVerificationScreen(
-              phoneNumber: phoneNumber,
-              onVerified: (user) async {
-                // Create driver user in Firestore after phone verification
-                final currentUser = user;
-                final driverUser = {
-                  'id': currentUser.uid,
-                  'fullName': _nameController.text.trim(),
-                  'email': '',
-                  'role': 'driver',
-                  'collegeId': _selectedCollege?.id ?? '',
-                  'approved': false,
-                  'emailVerified': true,
-                  'needsManualApproval': true,
-                  'createdAt': DateTime.now().toIso8601String(),
-                  'phoneNumber': phoneNumber,
-                  'rollNumber': null,
-                };
-                await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(currentUser.uid)
-                  .set(driverUser);
-                if (mounted) {
-                  context.go('/login');
-                }
-              },
-            ),
-          ),
-        );
-        return;
       } else {
-        if (!mounted) return;
         email = _emailController.text.trim();
         collegeName = _selectedCollege?.name ?? '';
-        // Validate domain for teacher/student
-        if (_selectedRole == UserRole.teacher || _selectedRole == UserRole.student) {
+        
+        // Check if using college email or personal email
+        if (_selectedCollege != null) {
           final domain = email.split('@').last;
-          final allowedDomains = _selectedCollege?.allowedDomains ?? [];
+          final allowedDomains = _selectedCollege!.allowedDomains;
+          
+          // If not using college domain, they need manual approval
           if (!allowedDomains.contains(domain)) {
-            _showErrorSnackBar('Email domain must be: ${allowedDomains.join(", ")}');
-            setState(() => _isLoading = false);
-            return;
+            // Show warning about manual approval for personal emails
+            final shouldContinue = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Personal Email Detected'),
+                content: Text(
+                  'You are using a personal email address. Your account will need to be approved by ${_selectedRole == UserRole.student ? 'a teacher' : 'a coordinator'} before you can access the app.\n\nCollege domains: ${allowedDomains.join(", ")}\n\nDo you want to continue with personal email?'
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('Continue'),
+                  ),
+                ],
+              ),
+            );
+            
+            if (shouldContinue != true) {
+              setState(() => _isLoading = false);
+              return;
+            }
           }
         }
       }
+
       final result = await authService.registerUser(
         email: email,
         password: _passwordController.text,
@@ -234,7 +223,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 
                 const SizedBox(height: AppSizes.paddingXLarge),
                 
-                // Role selection (moved to top)
+                // Role selection
                 const Text(
                   'Select Your Role',
                   style: TextStyle(
@@ -321,8 +310,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         onChanged: (college) {
                           setState(() {
                             _selectedCollege = college;
-                            if ((_selectedRole == UserRole.teacher || _selectedRole == UserRole.student) && college != null) {
-                              _emailDomainHint = 'Domain should be: ${college.allowedDomains.join(", ")}';
+                            if (college != null) {
+                              _emailDomainHint = 'College domains: ${college.allowedDomains.join(", ")} (or use personal email with approval)';
                             } else {
                               _emailDomainHint = null;
                             }
@@ -339,7 +328,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           return null;
                         },
                       ),
+                
                 const SizedBox(height: AppSizes.paddingMedium),
+                
                 // Email fields
                 if (_selectedRole == UserRole.busCoordinator)
                   Row(
@@ -378,7 +369,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ],
                   )
-                else if (_selectedRole != UserRole.driver && _selectedRole != UserRole.admin)
+                else
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -403,34 +394,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           padding: const EdgeInsets.only(top: 4, left: 8),
                           child: Text(
                             _emailDomainHint!,
-                            style: const TextStyle(color: AppColors.warning, fontSize: 12),
+                            style: const TextStyle(color: AppColors.primary, fontSize: 12),
                           ),
                         ),
                     ],
                   ),
-                if (_selectedRole != UserRole.driver && _selectedRole != UserRole.admin)
-                  const SizedBox(height: AppSizes.paddingMedium),
-                // Phone number field (required for all except admin)
-                if (_selectedRole != UserRole.admin)
-                  CustomInputField(
-                    label: 'Phone Number',
-                    hint: 'Enter your phone number',
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    prefixIcon: const Icon(Icons.phone_outlined),
-                    validator: (value) {
-                      if (_selectedRole == UserRole.admin) return null;
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your phone number';
-                      }
-                      if (value.length < 8) {
-                        return 'Enter a valid phone number';
-                      }
-                      return null;
-                    },
-                  ),
-                if (_selectedRole != UserRole.admin)
-                  const SizedBox(height: AppSizes.paddingMedium),
+                
+                const SizedBox(height: AppSizes.paddingMedium),
+                
+                // Phone number field
+                CustomInputField(
+                  label: 'Phone Number',
+                  hint: 'Enter your phone number',
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  prefixIcon: const Icon(Icons.phone_outlined),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your phone number';
+                    }
+                    if (value.length < 8) {
+                      return 'Enter a valid phone number';
+                    }
+                    return null;
+                  },
+                ),
+                
+                const SizedBox(height: AppSizes.paddingMedium),
+                
                 // Roll number field (only for student)
                 if (_selectedRole == UserRole.student)
                   CustomInputField(
@@ -446,8 +437,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       return null;
                     },
                   ),
+                
                 if (_selectedRole == UserRole.student)
                   const SizedBox(height: AppSizes.paddingMedium),
+                
                 // Password field
                 CustomInputField(
                   label: 'Password',

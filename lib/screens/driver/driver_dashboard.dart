@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/services/firestore_service.dart';
 import 'package:collegebus/services/location_service.dart';
@@ -23,6 +24,9 @@ class _DriverDashboardState extends State<DriverDashboard>
   LatLng? _currentLocation;
   BusModel? _myBus;
   bool _isSharing = false;
+  GoogleMapController? _mapController;
+  Set<Marker> _markers = {};
+  Set<Polyline> _polylines = {};
 
   List<RouteModel> _routes = [];
   RouteModel? _selectedRoute;
@@ -37,6 +41,7 @@ class _DriverDashboardState extends State<DriverDashboard>
     _loadRoutes();
     _loadBusNumbers();
     _loadMyBus();
+    _loadSavedSelections();
   }
 
   @override
@@ -45,12 +50,64 @@ class _DriverDashboardState extends State<DriverDashboard>
     super.dispose();
   }
 
+  Future<void> _loadSavedSelections() async {
+    final prefs = await SharedPreferences.getInstance();
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final userId = authService.currentUserModel?.id;
+    
+    if (userId != null) {
+      final savedBusNumber = prefs.getString('driver_${userId}_bus_number');
+      final savedRouteId = prefs.getString('driver_${userId}_route_id');
+      
+      if (savedBusNumber != null) {
+        setState(() => _selectedBusNumber = savedBusNumber);
+      }
+      
+      if (savedRouteId != null) {
+        final route = _routes.firstWhere(
+          (r) => r.id == savedRouteId,
+          orElse: () => RouteModel(
+            id: '',
+            routeName: '',
+            routeType: '',
+            startPoint: '',
+            endPoint: '',
+            stopPoints: [],
+            collegeId: '',
+            createdBy: '',
+            isActive: false,
+            createdAt: DateTime.now(),
+          ),
+        );
+        if (route.id.isNotEmpty) {
+          setState(() => _selectedRoute = route);
+        }
+      }
+    }
+  }
+
+  Future<void> _saveSelections() async {
+    final prefs = await SharedPreferences.getInstance();
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final userId = authService.currentUserModel?.id;
+    
+    if (userId != null) {
+      if (_selectedBusNumber != null) {
+        await prefs.setString('driver_${userId}_bus_number', _selectedBusNumber!);
+      }
+      if (_selectedRoute != null) {
+        await prefs.setString('driver_${userId}_route_id', _selectedRoute!.id);
+      }
+    }
+  }
+
   Future<void> _getCurrentLocation() async {
     final locationService = Provider.of<LocationService>(context, listen: false);
     final location = await locationService.getCurrentLocation();
     if (location != null) {
       setState(() {
         _currentLocation = location;
+        _updateMarkers();
       });
     }
   }
@@ -108,8 +165,104 @@ class _DriverDashboardState extends State<DriverDashboard>
             ),
           );
         });
+        _updateMarkers();
       }
     }
+  }
+
+  void _updateMarkers() {
+    final newMarkers = <Marker>{};
+    final newPolylines = <Polyline>{};
+
+    // Add current location marker
+    if (_currentLocation != null) {
+      newMarkers.add(
+        Marker(
+          markerId: const MarkerId('current_location'),
+          position: _currentLocation!,
+          infoWindow: const InfoWindow(title: 'Your Location'),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+        ),
+      );
+    }
+
+    // Add route markers and polyline if route is selected
+    if (_selectedRoute != null && _selectedRoute!.id.isNotEmpty) {
+      final routePoints = <LatLng>[];
+      
+      // Start point (green)
+      final startCoord = _getMockCoordinateForLocation(_selectedRoute!.startPoint);
+      routePoints.add(startCoord);
+      newMarkers.add(
+        Marker(
+          markerId: const MarkerId('start_point'),
+          position: startCoord,
+          infoWindow: InfoWindow(title: 'Start: ${_selectedRoute!.startPoint}'),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        ),
+      );
+      
+      // Stop points (yellow)
+      for (int i = 0; i < _selectedRoute!.stopPoints.length; i++) {
+        final stopCoord = _getMockCoordinateForLocation(_selectedRoute!.stopPoints[i]);
+        routePoints.add(stopCoord);
+        newMarkers.add(
+          Marker(
+            markerId: MarkerId('stop_$i'),
+            position: stopCoord,
+            infoWindow: InfoWindow(title: 'Stop: ${_selectedRoute!.stopPoints[i]}'),
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
+          ),
+        );
+      }
+      
+      // End point (red)
+      final endCoord = _getMockCoordinateForLocation(_selectedRoute!.endPoint);
+      routePoints.add(endCoord);
+      newMarkers.add(
+        Marker(
+          markerId: const MarkerId('end_point'),
+          position: endCoord,
+          infoWindow: InfoWindow(title: 'End: ${_selectedRoute!.endPoint}'),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        ),
+      );
+      
+      // Add polyline
+      if (routePoints.length > 1) {
+        newPolylines.add(
+          Polyline(
+            polylineId: const PolylineId('route_line'),
+            points: routePoints,
+            color: AppColors.primary,
+            width: 4,
+          ),
+        );
+      }
+    }
+
+    setState(() {
+      _markers = newMarkers;
+      _polylines = newPolylines;
+    });
+  }
+
+  LatLng _getMockCoordinateForLocation(String location) {
+    final mockCoords = {
+      'Central Station': const LatLng(12.9716, 77.5946),
+      'City Center': const LatLng(12.9726, 77.5956),
+      'Shopping Mall': const LatLng(12.9736, 77.5966),
+      'Hospital': const LatLng(12.9746, 77.5976),
+      'University Campus': const LatLng(12.9756, 77.5986),
+      'Airport': const LatLng(12.9766, 77.5996),
+      'Hotel District': const LatLng(12.9776, 77.6006),
+      'Business Park': const LatLng(12.9786, 77.6016),
+      'Suburban Area': const LatLng(12.9796, 77.6026),
+      'Residential Area': const LatLng(12.9806, 77.6036),
+      'Park': const LatLng(12.9816, 77.6046),
+    };
+    
+    return mockCoords[location] ?? _currentLocation ?? const LatLng(12.9716, 77.5946);
   }
 
   Future<void> _toggleLocationSharing() async {
@@ -130,6 +283,13 @@ class _DriverDashboardState extends State<DriverDashboard>
       // Stop sharing location
       locationService.stopLocationTracking();
       setState(() => _isSharing = false);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Location sharing stopped'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
     } else {
       // Start sharing location
       await locationService.startLocationTracking(
@@ -141,16 +301,19 @@ class _DriverDashboardState extends State<DriverDashboard>
           );
           
           await firestoreService.updateBusLocation(_myBus!.id, busLocation);
-          if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Location shared successfully!'),
-              backgroundColor: AppColors.success,
-            ),
-          );
+          
+          // Update current location
+          setState(() => _currentLocation = location);
         },
       );
       setState(() => _isSharing = true);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Location sharing started'),
+          backgroundColor: AppColors.success,
+        ),
+      );
     }
   }
 
@@ -199,7 +362,7 @@ class _DriverDashboardState extends State<DriverDashboard>
           // Bus Setup Tab
           Column(
             children: [
-              // Location display - Always show this
+              // Location display
               Container(
                 padding: const EdgeInsets.all(AppSizes.paddingMedium),
                 color: _currentLocation != null 
@@ -242,6 +405,7 @@ class _DriverDashboardState extends State<DriverDashboard>
                         ),
                       ),
                       const SizedBox(height: AppSizes.paddingLarge),
+                      
                       if (_myBus == null) ...[
                         DropdownButtonFormField<String>(
                           value: _selectedBusNumber,
@@ -271,6 +435,7 @@ class _DriverDashboardState extends State<DriverDashboard>
                             setState(() {
                               _selectedRoute = route;
                             });
+                            _updateMarkers();
                           },
                           decoration: const InputDecoration(
                             labelText: 'Select Route',
@@ -299,8 +464,10 @@ class _DriverDashboardState extends State<DriverDashboard>
                                     );
                                     
                                     await firestoreService.createBus(newBus);
+                                    await _saveSelections();
                                     if (!mounted) return;
                                     setState(() => _myBus = newBus);
+                                    _updateMarkers();
                                     
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
@@ -352,8 +519,24 @@ class _DriverDashboardState extends State<DriverDashboard>
                                     onPressed: () async {
                                       final firestoreService = Provider.of<FirestoreService>(context, listen: false);
                                       await firestoreService.deleteBus(_myBus!.id);
+                                      
+                                      // Clear saved selections
+                                      final prefs = await SharedPreferences.getInstance();
+                                      final authService = Provider.of<AuthService>(context, listen: false);
+                                      final userId = authService.currentUserModel?.id;
+                                      if (userId != null) {
+                                        await prefs.remove('driver_${userId}_bus_number');
+                                        await prefs.remove('driver_${userId}_route_id');
+                                      }
+                                      
                                       if (!mounted) return;
-                                      setState(() => _myBus = null);
+                                      setState(() {
+                                        _myBus = null;
+                                        _selectedBusNumber = null;
+                                        _selectedRoute = null;
+                                      });
+                                      _updateMarkers();
+                                      
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         const SnackBar(
                                           content: Text('Bus assignment removed'),
@@ -389,25 +572,16 @@ class _DriverDashboardState extends State<DriverDashboard>
                 child: _currentLocation != null
                     ? GoogleMap(
                         onMapCreated: (GoogleMapController controller) {
-                          // _mapController = controller; // This line was removed
+                          _mapController = controller;
                         },
                         initialCameraPosition: CameraPosition(
                           target: _currentLocation!,
                           zoom: 16.0,
                         ),
+                        markers: _markers,
+                        polylines: _polylines,
                         myLocationEnabled: true,
                         myLocationButtonEnabled: true,
-                        markers: {
-                          if (_currentLocation != null)
-                            Marker(
-                              markerId: const MarkerId('current_location'),
-                              position: _currentLocation!,
-                              infoWindow: const InfoWindow(title: 'Bus Location'),
-                              icon: BitmapDescriptor.defaultMarkerWithHue(
-                                BitmapDescriptor.hueGreen,
-                              ),
-                            ),
-                        },
                       )
                     : const Center(
                         child: CircularProgressIndicator(),
@@ -426,32 +600,6 @@ class _DriverDashboardState extends State<DriverDashboard>
                 ),
                 child: Column(
                   children: [
-                    // Location info
-                    if (_currentLocation != null)
-                      Container(
-                        padding: const EdgeInsets.all(AppSizes.paddingMedium),
-                        margin: const EdgeInsets.only(bottom: AppSizes.paddingMedium),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.location_on, color: AppColors.primary),
-                            const SizedBox(width: AppSizes.paddingSmall),
-                            Expanded(
-                              child: Text(
-                                'Your Location: ${_currentLocation!.latitude.toStringAsFixed(4)}, ${_currentLocation!.longitude.toStringAsFixed(4)}',
-                                style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    
                     if (_myBus != null) ...[
                       Text(
                         'Bus ${_myBus!.busNumber}',

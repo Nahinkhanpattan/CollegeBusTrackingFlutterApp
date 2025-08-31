@@ -99,28 +99,34 @@ class AuthService extends ChangeNotifier {
     String? rollNumber,
   }) async {
     try {
-      // Extract domain from email
-      final domain = email.split('@').last;
+      // Extract domain from email if email is provided
+      final domain = email.isNotEmpty ? email.split('@').last : '';
       
-      // Check if college exists and if domain is allowed
-      final collegeQuery = await _firestore
-          .collection(FirebaseCollections.colleges)
-          .where('allowedDomains', arrayContains: domain)
-          .get();
-
       String collegeId = '';
+      bool needsManualApproval = false;
 
-      if (collegeQuery.docs.isNotEmpty) {
-        // College exists and domain is allowed
-        collegeId = collegeQuery.docs.first.id;
+      if (role == UserRole.busCoordinator) {
+        // Create new college for coordinator
+        collegeId = await _createCollege(collegeName, domain, '');
       } else {
-        // Check if it's an academic domain (.ac.in)
-        if (domain.endsWith('.ac.in') && role == UserRole.busCoordinator) {
-          // Create new college for coordinator with academic domain
-          collegeId = await _createCollege(collegeName, domain, '');
+        // Find college by name
+        final collegeQuery = await _firestore
+            .collection(FirebaseCollections.colleges)
+            .where('name', isEqualTo: collegeName)
+            .get();
+
+        if (collegeQuery.docs.isNotEmpty) {
+          final college = CollegeModel.fromMap(collegeQuery.docs.first.data(), collegeQuery.docs.first.id);
+          collegeId = college.id;
+          
+          // Check if using college domain or personal email
+          if (email.isNotEmpty && !college.allowedDomains.contains(domain)) {
+            needsManualApproval = true; // Personal email needs approval
+          }
         } else {
-          // Use a default college ID or create one
+          // College not found, use default
           collegeId = collegeName.toLowerCase().replaceAll(' ', '_');
+          needsManualApproval = true;
         }
       }
 
@@ -139,8 +145,9 @@ class AuthService extends ChangeNotifier {
         email: email,
         role: role,
         collegeId: collegeId,
-        approved: false, // Registration is always manual approval
+        approved: false,
         emailVerified: false,
+        needsManualApproval: needsManualApproval || role == UserRole.driver, // Drivers always need approval
         createdAt: DateTime.now(),
         phoneNumber: phoneNumber,
         rollNumber: rollNumber,
@@ -161,7 +168,9 @@ class AuthService extends ChangeNotifier {
       return {
         'success': true,
         'needsEmailVerification': true,
-        'message': 'Please check your email for verification code.',
+        'message': needsManualApproval 
+            ? 'Please check your email for verification. Your account will also need approval.'
+            : 'Please check your email for verification code.',
       };
     } catch (e) {
       return {
