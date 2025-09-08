@@ -1,0 +1,13 @@
+Temporary Test Rules - Copy and paste these into Firebase Console > Firestore Database > Rules:
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+
+⚠️ WARNING: These rules allow any authenticated user to read/write all data. 
+Only use for testing, then replace with proper rules!

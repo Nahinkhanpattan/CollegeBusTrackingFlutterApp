@@ -72,6 +72,9 @@ class AuthService extends ChangeNotifier {
   Future<void> _loadUserModel(String uid) async {
     try {
       print('DEBUG: Loading user model for UID: $uid');
+      print('DEBUG: Current user: ${_auth.currentUser?.uid}');
+      print('DEBUG: Is user authenticated: ${_auth.currentUser != null}');
+      
       final doc = await _firestore.collection(FirebaseCollections.users).doc(uid).get();
       if (doc.exists) {
         final data = doc.data()!;
@@ -85,6 +88,7 @@ class AuthService extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       print('DEBUG: Error loading user model: $e');
+      print('DEBUG: Error type: ${e.runtimeType}');
       // Error loading user model, but app can continue
     }
   }
@@ -154,12 +158,30 @@ class AuthService extends ChangeNotifier {
       );
 
       try {
-      await _firestore
-          .collection(FirebaseCollections.users)
-          .doc(user.uid)
-          .set(userModel.toMap());
+        // Ensure user is properly authenticated before writing to Firestore
+        await user.reload();
+        
+        print('DEBUG: User authenticated, UID: ${user.uid}');
+        print('DEBUG: Attempting to write user document to Firestore...');
+        
+        await _firestore
+            .collection(FirebaseCollections.users)
+            .doc(user.uid)
+            .set(userModel.toMap());
+        
+        print('DEBUG: User document successfully written to Firestore');
         
       } catch (e) {
+        print('DEBUG: Firestore write error: $e');
+        print('DEBUG: Error type: ${e.runtimeType}');
+        
+        // If Firestore write fails, delete the Firebase Auth user to clean up
+        try {
+          await user.delete();
+          print('DEBUG: Firebase Auth user deleted due to Firestore error');
+        } catch (deleteError) {
+          print('DEBUG: Error deleting Firebase Auth user: $deleteError');
+        }
         rethrow;
       }
 
@@ -173,9 +195,23 @@ class AuthService extends ChangeNotifier {
             : 'Please check your email for verification code.',
       };
     } catch (e) {
+      String errorMessage = 'Registration failed';
+      
+      if (e.toString().contains('permission-denied')) {
+        errorMessage = 'Permission denied. Please check your Firebase configuration.';
+      } else if (e.toString().contains('email-already-in-use')) {
+        errorMessage = 'An account with this email already exists.';
+      } else if (e.toString().contains('weak-password')) {
+        errorMessage = 'Password is too weak. Please use a stronger password.';
+      } else if (e.toString().contains('invalid-email')) {
+        errorMessage = 'Invalid email address.';
+      } else {
+        errorMessage = 'Registration failed: ${e.toString()}';
+      }
+      
       return {
         'success': false,
-        'message': e.toString(),
+        'message': errorMessage,
       };
     }
   }
@@ -246,20 +282,13 @@ class AuthService extends ChangeNotifier {
         };
       }
 
-      // For all other roles: require BOTH email verified AND approved
-      if (!emailVerified) {
-        print('DEBUG: Email not verified');
+      // For all other roles: allow login if EITHER email is verified OR account is approved
+      if (!(emailVerified || approved)) {
+        print('DEBUG: Neither email verified nor approved');
         return {
           'success': false,
-          'message': 'Please verify your email address first.',
+          'message': 'Please verify your email or wait for approval.',
           'needsEmailVerification': true,
-        };
-      }
-      if (!approved) {
-        print('DEBUG: Account not approved');
-        return {
-          'success': false,
-          'message': 'Your account is pending approval.',
         };
       }
       

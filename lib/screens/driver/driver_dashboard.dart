@@ -573,6 +573,7 @@ class _DriverDashboardState extends State<DriverDashboard>
                     ? GoogleMap(
                         onMapCreated: (GoogleMapController controller) {
                           _mapController = controller;
+                          print('DEBUG: Driver GoogleMap created successfully');
                         },
                         initialCameraPosition: CameraPosition(
                           target: _currentLocation!,
@@ -582,6 +583,7 @@ class _DriverDashboardState extends State<DriverDashboard>
                         polylines: _polylines,
                         myLocationEnabled: true,
                         myLocationButtonEnabled: true,
+                        mapType: MapType.normal,
                       )
                     : const Center(
                         child: CircularProgressIndicator(),

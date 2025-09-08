@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:collegebus/services/auth_service.dart';
 import 'package:collegebus/auth/login_screen.dart';
 import 'package:collegebus/auth/register_screen.dart';
-import 'package:collegebus/auth/otp_verification.dart' show EmailVerificationScreen;
+
 import 'package:collegebus/auth/forgot_password_screen.dart';
 import 'package:collegebus/screens/student/student_dashboard.dart';
 import 'package:collegebus/screens/student/bus_schedule_screen.dart';
@@ -21,8 +21,7 @@ class AppRouter {
       final authService = Provider.of<AuthService>(context, listen: false);
       final isLoggedIn = authService.currentUserModel != null;
       final isLoginRoute = state.matchedLocation == '/login' || 
-                          state.matchedLocation == '/register' ||
-                          state.matchedLocation.startsWith('/otp');
+                          state.matchedLocation == '/register';
 
       if (!isLoggedIn && !isLoginRoute) {
         return '/login';
@@ -62,12 +61,7 @@ class AppRouter {
         path: '/forgot-password',
         builder: (context, state) => const ForgotPasswordScreen(),
       ),
-      GoRoute(
-        path: '/email-verification/:email',
-        builder: (context, state) => EmailVerificationScreen(
-          email: state.pathParameters['email']!,
-        ),
-      ),
+
       GoRoute(
         path: '/student',
         builder: (context, state) => const StudentDashboard(),

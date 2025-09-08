@@ -63,8 +63,7 @@ dependencies:
   # Email validation
   email_validator: ^2.1.17
   
-  # OTP input
-  pinput: ^3.0.1
+
   
   # Shared preferences for persistence
   shared_preferences: ^2.2.2

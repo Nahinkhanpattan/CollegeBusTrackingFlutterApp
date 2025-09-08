@@ -1,3 +1,5 @@
+Copy and paste these rules into your Firebase Console > Firestore Database > Rules:
+
 rules_version = '2';
 
 service cloud.firestore {

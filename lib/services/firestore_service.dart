@@ -303,14 +303,27 @@ class FirestoreService {
 
   Stream<List<String>> getBusNumbers(String collegeId) {
     try {
+      print('DEBUG: Querying bus numbers for college: $collegeId');
+      // Get all documents and filter by document ID pattern (rvr_1, rvr_2, etc.)
       return _firestore
           .collection(FirebaseCollections.busNumbers)
-          .where('collegeId', isEqualTo: collegeId)
           .snapshots()
-          .map((snapshot) => snapshot.docs
-              .map((doc) => doc.data()['busNumber'] as String)
-              .toList());
+          .map((snapshot) {
+            print('DEBUG: Found ${snapshot.docs.length} total bus number documents');
+            final busNumbers = snapshot.docs
+                .where((doc) => doc.id.startsWith('${collegeId}_'))
+                .map((doc) {
+                  final data = doc.data();
+                  print('DEBUG: Document ${doc.id} data: $data');
+                  return data['busNumber'] as String? ?? '';
+                })
+                .where((busNumber) => busNumber.isNotEmpty)
+                .toList();
+            print('DEBUG: Filtered bus numbers for $collegeId: $busNumbers');
+            return busNumbers;
+          });
     } catch (e) {
+      print('DEBUG: Error querying bus numbers: $e');
       return Stream.value([]);
     }
   }

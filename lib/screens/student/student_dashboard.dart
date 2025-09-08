@@ -682,6 +682,7 @@ class _StudentDashboardState extends State<StudentDashboard>
                     ? GoogleMap(
                         onMapCreated: (GoogleMapController controller) {
                           _mapController = controller;
+                          print('DEBUG: GoogleMap created successfully');
                         },
                         initialCameraPosition: CameraPosition(
                           target: _currentLocation!,
@@ -691,6 +692,7 @@ class _StudentDashboardState extends State<StudentDashboard>
                         polylines: _polylines,
                         myLocationEnabled: true,
                         myLocationButtonEnabled: true,
+                        mapType: MapType.normal,
                       )
                     : const Center(
                         child: CircularProgressIndicator(),
