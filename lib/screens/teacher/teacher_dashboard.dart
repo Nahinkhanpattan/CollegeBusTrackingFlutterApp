@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -33,6 +34,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
   String? _selectedRouteType;
   List<RouteModel> _routes = [];
   Set<Polyline> _polylines = {};
+  Map<String, StreamSubscription> _busLocationSubscriptions = {};
 
   // Get unique stops from all buses
   List<String> get _allStops {
@@ -79,6 +81,11 @@ class _TeacherDashboardState extends State<TeacherDashboard>
   @override
   void dispose() {
     _tabController.dispose();
+    // Cancel all location subscriptions
+    for (final subscription in _busLocationSubscriptions.values) {
+      subscription.cancel();
+    }
+    _busLocationSubscriptions.clear();
     super.dispose();
   }
 
@@ -146,11 +153,20 @@ class _TeacherDashboardState extends State<TeacherDashboard>
     final collegeId = authService.currentUserModel?.collegeId;
     if (collegeId != null) {
       firestoreService.getBusesByCollege(collegeId).listen((buses) {
+        // Cancel existing subscriptions
+        for (final subscription in _busLocationSubscriptions.values) {
+          subscription.cancel();
+        }
+        _busLocationSubscriptions.clear();
+        
         setState(() {
           _allBuses = buses;
           _applyFilters();
           _updateMarkers();
         });
+        
+        // Set up location listeners for each bus
+        _setupBusLocationListeners(buses, firestoreService);
       });
     }
   }
@@ -180,6 +196,54 @@ class _TeacherDashboardState extends State<TeacherDashboard>
         });
       });
     }
+  }
+
+  void _setupBusLocationListeners(List<BusModel> buses, FirestoreService firestoreService) {
+    for (final bus in buses) {
+      final subscription = firestoreService.getBusLocation(bus.id).listen((location) {
+        if (mounted) {
+          _updateBusMarker(bus, location);
+        }
+      });
+      _busLocationSubscriptions[bus.id] = subscription;
+    }
+  }
+
+  void _updateBusMarker(BusModel bus, BusLocationModel? location) {
+    final route = _routes.firstWhere(
+      (r) => r.id == bus.routeId,
+      orElse: () => RouteModel(
+        id: '',
+        routeName: 'N/A',
+        routeType: '',
+        startPoint: '',
+        endPoint: '',
+        stopPoints: [],
+        collegeId: '',
+        createdBy: '',
+        isActive: false,
+        createdAt: DateTime.now(),
+      ),
+    );
+
+    final marker = Marker(
+      markerId: MarkerId('bus_${bus.id}'),
+      position: location?.currentLocation ?? _getMockCoordinateForLocation(route.startPoint),
+      infoWindow: InfoWindow(
+        title: 'Bus ${bus.busNumber} ${location != null ? "(Live)" : "(Not Live)"}',
+        snippet: '${route.startPoint} → ${route.endPoint}\n${location != null ? 'Last updated: ${location.timestamp.toString().substring(11, 16)}' : 'Status: Offline'}',
+      ),
+      icon: BitmapDescriptor.defaultMarkerWithHue(
+        _selectedBus?.id == bus.id ? BitmapDescriptor.hueRed : 
+        location != null ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueOrange,
+      ),
+      onTap: () => _selectBus(bus),
+    );
+
+    setState(() {
+      _markers.removeWhere((m) => m.markerId.value == 'bus_${bus.id}');
+      _markers.add(marker);
+    });
   }
 
   void _applyFilters() {
@@ -360,7 +424,6 @@ class _TeacherDashboardState extends State<TeacherDashboard>
   }
 
   void _addBusMarker(BusModel bus, Set<Marker> markers) {
-    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
     final route = _routes.firstWhere(
       (r) => r.id == bus.routeId,
       orElse: () => RouteModel(
@@ -377,46 +440,20 @@ class _TeacherDashboardState extends State<TeacherDashboard>
       ),
     );
     
-    // Listen to real-time location updates for this bus
-    firestoreService.getBusLocation(bus.id).listen((location) {
-      if (location != null) {
-        final marker = Marker(
-          markerId: MarkerId('bus_${bus.id}'),
-          position: location.currentLocation,
-          infoWindow: InfoWindow(
-            title: 'Bus ${bus.busNumber}',
-            snippet: '${route.startPoint} → ${route.endPoint}\nLast updated: ${location.timestamp.toString().substring(11, 16)}',
-          ),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            _selectedBus?.id == bus.id ? BitmapDescriptor.hueRed : BitmapDescriptor.hueGreen,
-          ),
-          onTap: () => _selectBus(bus),
-        );
-
-        setState(() {
-          _markers.removeWhere((m) => m.markerId.value == 'bus_${bus.id}');
-          _markers.add(marker);
-        });
-      } else {
-        // Show bus at start point if no live location
-        final startLocation = _getMockCoordinateForLocation(route.startPoint);
-        final marker = Marker(
-          markerId: MarkerId('bus_${bus.id}'),
-          position: startLocation,
-          infoWindow: InfoWindow(
-            title: 'Bus ${bus.busNumber} (Not Live)',
-            snippet: '${route.startPoint} → ${route.endPoint}\nStatus: Offline',
-          ),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-          onTap: () => _selectBus(bus),
-        );
-        
-        setState(() {
-          _markers.removeWhere((m) => m.markerId.value == 'bus_${bus.id}');
-          _markers.add(marker);
-        });
-      }
-    });
+    // Show bus at start point initially (will be updated by location listener)
+    final startLocation = _getMockCoordinateForLocation(route.startPoint);
+    final marker = Marker(
+      markerId: MarkerId('bus_${bus.id}'),
+      position: startLocation,
+      infoWindow: InfoWindow(
+        title: 'Bus ${bus.busNumber} (Loading...)',
+        snippet: '${route.startPoint} → ${route.endPoint}\nStatus: Loading...',
+      ),
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+      onTap: () => _selectBus(bus),
+    );
+    
+    markers.add(marker);
   }
 
   void _selectBus(BusModel bus) {
@@ -731,24 +768,80 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Bus ${_selectedBus!.busNumber}',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: AppColors.primary,
+                            child: const Icon(
+                              Icons.directions_bus,
+                              color: AppColors.onPrimary,
+                            ),
+                          ),
+                          const SizedBox(width: AppSizes.paddingMedium),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Bus ${_selectedBus!.busNumber}',
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                Text(
+                                  'Route: ${_routes.firstWhere((r) => r.id == _selectedBus!.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).startPoint} → ${_routes.firstWhere((r) => r.id == _selectedBus!.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).endPoint}',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () {
+                              setState(() {
+                                _selectedBus = null;
+                                _polylines.clear();
+                              });
+                              _updateMarkers();
+                            },
+                            icon: const Icon(Icons.close),
+                            color: AppColors.textSecondary,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: AppSizes.paddingSmall),
-                      Text(
-                        'Route: ${_routes.firstWhere((r) => r.id == _selectedBus!.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).startPoint} → ${_routes.firstWhere((r) => r.id == _selectedBus!.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).endPoint}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: AppColors.textSecondary,
+                      const SizedBox(height: AppSizes.paddingMedium),
+                      Container(
+                        padding: const EdgeInsets.all(AppSizes.paddingSmall),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(AppSizes.radiusSmall),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: AppColors.primary,
+                              size: 16,
+                            ),
+                            const SizedBox(width: AppSizes.paddingSmall),
+                            Expanded(
+                              child: Text(
+                                'Tap on the map to see live bus location. The bus marker will update in real-time as the driver moves.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       if ((_routes.firstWhere((r) => r.id == _selectedBus!.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).stopPoints.isNotEmpty)) ...[
-                        const SizedBox(height: AppSizes.paddingSmall),
+                        const SizedBox(height: AppSizes.paddingMedium),
                         Text(
                           'Stops: ${_routes.firstWhere((r) => r.id == _selectedBus!.routeId, orElse: () => RouteModel(id: '', routeName: 'N/A', routeType: '', startPoint: '', endPoint: '', stopPoints: [], collegeId: '', createdBy: '', isActive: false, createdAt: DateTime.now(),)).stopPoints.join(' → ')}',
                           style: const TextStyle(

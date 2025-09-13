@@ -63,6 +63,9 @@ class LocationService {
     int intervalSeconds = 10,
   }) async {
     try {
+      // Stop any existing tracking first
+      stopLocationTracking();
+      
       final hasPermission = await checkLocationPermission();
       if (!hasPermission) {
         final granted = await requestLocationPermission();
@@ -76,12 +79,24 @@ class LocationService {
 
       _positionStreamSubscription = Geolocator.getPositionStream(
         locationSettings: locationSettings,
-      ).listen((Position position) {
-        final latLng = LatLng(position.latitude, position.longitude);
-        _locationController.add(latLng);
-        onLocationUpdate(latLng);
-      });
+      ).listen(
+        (Position position) {
+          final latLng = LatLng(position.latitude, position.longitude);
+          print('DEBUG: Location update received: ${latLng.latitude}, ${latLng.longitude}');
+          _locationController.add(latLng);
+          onLocationUpdate(latLng);
+        },
+        onError: (error) {
+          print('DEBUG: Location stream error: $error');
+        },
+        onDone: () {
+          print('DEBUG: Location stream completed');
+        },
+      );
+      
+      print('DEBUG: Location tracking started successfully');
     } catch (e) {
+      print('DEBUG: Error starting location tracking: $e');
       // Location tracking failed, but app can continue
     }
   }
@@ -89,6 +104,11 @@ class LocationService {
   void stopLocationTracking() {
     _positionStreamSubscription?.cancel();
     _positionStreamSubscription = null;
+    print('DEBUG: Location tracking stopped');
+  }
+
+  bool get isTracking {
+    return _positionStreamSubscription != null;
   }
 
   Future<double> calculateDistance(LatLng start, LatLng end) async {

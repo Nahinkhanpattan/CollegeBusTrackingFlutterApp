@@ -294,16 +294,28 @@ class _DriverDashboardState extends State<DriverDashboard>
       // Start sharing location
       await locationService.startLocationTracking(
         onLocationUpdate: (location) async {
+          print('DEBUG: Driver location update: ${location.latitude}, ${location.longitude}');
+          
           final busLocation = BusLocationModel(
             busId: _myBus!.id,
             currentLocation: location,
             timestamp: DateTime.now(),
           );
           
-          await firestoreService.updateBusLocation(_myBus!.id, busLocation);
+          try {
+            await firestoreService.updateBusLocation(_myBus!.id, busLocation);
+            print('DEBUG: Location saved to Firestore successfully');
+          } catch (e) {
+            print('DEBUG: Error saving location to Firestore: $e');
+          }
           
-          // Update current location
-          setState(() => _currentLocation = location);
+          // Update current location and markers
+          if (mounted) {
+            setState(() {
+              _currentLocation = location;
+            });
+            _updateMarkers();
+          }
         },
       );
       setState(() => _isSharing = true);
@@ -649,20 +661,35 @@ class _DriverDashboardState extends State<DriverDashboard>
                           color: AppColors.success.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.location_on,
                               color: AppColors.success,
                             ),
-                            SizedBox(width: AppSizes.paddingMedium),
+                            const SizedBox(width: AppSizes.paddingMedium),
                             Expanded(
-                              child: Text(
-                                'Your location is being shared with students and teachers',
-                                style: TextStyle(
-                                  color: AppColors.success,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Your location is being shared with students and teachers',
+                                    style: TextStyle(
+                                      color: AppColors.success,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  if (_currentLocation != null) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Current: ${_currentLocation!.latitude.toStringAsFixed(4)}, ${_currentLocation!.longitude.toStringAsFixed(4)}',
+                                      style: const TextStyle(
+                                        color: AppColors.success,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                           ],
