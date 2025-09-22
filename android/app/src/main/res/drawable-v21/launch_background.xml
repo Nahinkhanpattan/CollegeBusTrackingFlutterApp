@@ -5,6 +5,6 @@
     <item>
         <bitmap
             android:gravity="center"
-            android:src="@drawable/upasthit_logo" />
+            android:src="@drawable/upashtit_logo_new" />
     </item>
 </layer-list>

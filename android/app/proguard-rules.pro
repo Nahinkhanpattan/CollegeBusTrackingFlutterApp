@@ -24,6 +24,10 @@
 -keep class com.google.firebase.** { *; }
 -keep class com.google.android.gms.** { *; }
 
+# Keep Play Core (SplitInstall / SplitCompat) for Flutter's PlayStoreDeferredComponentManager
+-keep class com.google.android.play.core.** { *; }
+-dontwarn com.google.android.play.core.**
+
 # Keep Flutter classes
 -keep class io.flutter.** { *; }
 

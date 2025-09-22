@@ -15,7 +15,7 @@ class SplashScreen extends StatelessWidget {
             SizedBox(
               width: 150,
               height: 150,
-              child: Image.asset('assets/images/upasthit_logo.jpg'),
+              child: Image.asset('assets/images/upashtit-logo-new.png'),
             ),
             const SizedBox(height: 32),
             // Horizontal loading bar

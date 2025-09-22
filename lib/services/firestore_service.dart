@@ -331,10 +331,10 @@ class FirestoreService {
   // Bus location operations
   Future<void> updateBusLocation(String busId, BusLocationModel location) async {
     try {
-    await _firestore
-        .collection(FirebaseCollections.busLocations)
-        .doc(busId)
-        .set(location.toMap());
+      await _firestore
+          .collection(FirebaseCollections.busLocations)
+          .doc(busId)
+          .set(location.toMap(), SetOptions(merge: true));
     } catch (e) {
       throw Exception('Error updating bus location: $e');
     }
